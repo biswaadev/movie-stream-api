@@ -285,7 +285,11 @@ def stream_transcode():
         ss = request.args.get("ss", "0").strip()
         headers_str = f"User-Agent: {api.ANDROID_USER_AGENT}\r\n\r\n"
 
-        cmd = ["ffmpeg"]
+        cmd = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel", "error",
+        ]
         try:
             ss_val = float(ss)
             if ss_val > 0:
@@ -299,7 +303,9 @@ def stream_transcode():
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-tune", "zerolatency",
-            "-crf", "26",
+            "-threads", "0",
+            "-pix_fmt", "yuv420p",
+            "-crf", "28",
             "-c:a", "copy",
             "-f", "mp4",
             "-movflags", "frag_keyframe+empty_moov+default_base_moof",
