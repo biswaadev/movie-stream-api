@@ -806,15 +806,7 @@ function buildOptions(list) {
   const out = [];
   const seen = new Set();
 
-  // Strictly filter out audio-only tracks (e.g. tran-audio dub URLs) for video playback
-  const videoStreams = list.filter(r => {
-    const u = String(r.resourceLink || r.url || r.link || '').toLowerCase();
-    return !u.includes('tran-audio') && !u.includes('/audio/');
-  });
-
-  const sourceList = videoStreams.length ? videoStreams : list;
-
-  for (const r of sourceList) {
+  for (const r of list) {
     const rawRes = parseInt(r.resolution, 10);
     const hevc = isHevcRes(r);
     const baseLabel = rawRes ? rawRes + 'p' : String(r.quality || r.resolution || r.name || '').trim();
@@ -832,8 +824,15 @@ function buildOptions(list) {
   // Sort by resolution ascending (e.g. 480p, 720p, 1080p)
   out.sort((a, b) => a.baseRes - b.baseRes);
 
+  // Auto-select: prefer highest H.264 stream so video plays natively with zero transcode overhead
+  let best = -1;
+  for (let i = out.length - 1; i >= 0; i--) {
+    if (!out[i].hevc) { best = i; break; }
+  }
+  if (best === -1) best = Math.max(0, out.length - 1);
+
   state.options = out;
-  state.curIndex = Math.max(0, out.length - 1);
+  state.curIndex = best;
 }
 
 function currentRaw() {
@@ -849,8 +848,6 @@ function getQualitiesSummary(list) {
   if (!list || !list.length) return "N/A";
   const resSet = new Set();
   for (const r of list) {
-    const u = String(r.resourceLink || r.url || r.link || '').toLowerCase();
-    if (u.includes('tran-audio')) continue;
     const num = parseInt(r.resolution, 10);
     if (num > 0) resSet.add(num);
   }
@@ -981,7 +978,10 @@ function applyStream(autoplay) {
   state.totalDur = rawDur || modelDur || 0;
 
   const rawUrl = rawUrlOf(raw);
-  const target = "/stream_transcode?url=" + encodeURIComponent(rawUrl);
+  const hevc = isHevcRes(raw);
+  const target = hevc
+    ? ("/stream_transcode?url=" + encodeURIComponent(rawUrl))
+    : ("/stream?url=" + encodeURIComponent(rawUrl));
   if (target === video.getAttribute("data-src")) { if (autoplay && state.playing) video.play().catch(() => {}); return; }
   video.setAttribute("data-src", target);
   video.src = target;
