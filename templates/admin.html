@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin Dashboard — User Tracking & Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0b0d12;
+    --surface: #14171f;
+    --surface2: #1e222d;
+    --surface3: #282d3c;
+    --accent: #e50914;
+    --accent-hover: #f40612;
+    --accent-glow: rgba(229, 9, 20, 0.25);
+    --text: #f5f5f7;
+    --muted: #8e95a5;
+    --border: rgba(255, 255, 255, 0.08);
+    --green: #10b981;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+    --orange: #f59e0b;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Skeleton Shimmer */
+  @keyframes skeleton-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.03) 75%) !important;
+    background-size: 200% 100% !important;
+    animation: skeleton-shimmer 1.5s infinite linear !important;
+    border-radius: 6px;
+    color: transparent !important;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  /* Header */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(11, 13, 18, 0.95);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .logo-wrap { display: flex; align-items: center; gap: 12px; }
+  .logo { font-weight: 800; font-size: 18px; color: var(--accent); }
+  .logo span { color: #fff; }
+  .badge-admin {
+    background: rgba(229, 9, 20, 0.15);
+    color: var(--accent);
+    border: 1px solid rgba(229, 9, 20, 0.4);
+    font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 6px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .header-actions { display: flex; align-items: center; gap: 12px; }
+  .btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background .15s, border-color .15s, transform .1s;
+  }
+  .btn:hover { background: var(--surface3); border-color: rgba(255,255,255,0.2); }
+  .btn:active { transform: scale(0.98); }
+  .btn-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+  .btn-danger:hover { background: rgba(239, 68, 68, 0.25); border-color: #ef4444; }
+  .btn-primary { background: var(--accent); color: white; border: none; }
+  .btn-primary:hover { background: var(--accent-hover); }
+
+  /* Main Container */
+  main { flex: 1; padding: 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+
+  /* Metric KPI Cards */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 8px;
+    position: relative; overflow: hidden;
+  }
+  .kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    opacity: 0.6;
+  }
+  .kpi-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi-val { font-size: 26px; font-weight: 800; color: #fff; line-height: 1; }
+  .kpi-sub { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+  /* Two Column Insights */
+  .insights-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 900px) { .insights-grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .panel-title { font-size: 15px; font-weight: 700; color: #fff; }
+  .list-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 13px;
+  }
+  .list-item:last-child { border-bottom: none; }
+
+  /* Table Controls */
+  .table-controls {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .search-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    outline: none;
+    min-width: 260px;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .select-filter {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* Data Table */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-x: auto;
+  }
+  table {
+    width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;
+  }
+  th {
+    background: var(--surface2);
+    padding: 12px 16px;
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text);
+    vertical-align: middle;
+  }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Action Badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 6px;
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px;
+    white-space: nowrap;
+  }
+  .badge-watch { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .badge-stream { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+  .badge-download { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3); }
+  .badge-search { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .badge-page { background: rgba(255, 255, 255, 0.08); color: var(--muted); border: 1px solid rgba(255, 255, 255, 0.1); }
+
+  .ip-tag {
+    font-family: monospace; font-size: 12px; font-weight: 600;
+    color: #60a5fa; cursor: pointer;
+    background: rgba(96, 165, 250, 0.1);
+    padding: 2px 6px; border-radius: 4px;
+    display: inline-block;
+  }
+  .ip-tag:hover { text-decoration: underline; background: rgba(96, 165, 250, 0.2); }
+
+  .device-tag {
+    color: var(--muted); font-size: 11px; display: inline-flex; align-items: center; gap: 4px;
+  }
+
+  /* Pagination */
+  .pagination {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-top: 1px solid var(--border);
+    font-size: 13px; color: var(--muted);
+  }
+
+  /* Live pulse dot */
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #10b981;
+    display: inline-block;
+    box-shadow: 0 0 8px #10b981;
+    animation: pulse 1.8s infinite;
+  }
+  @keyframes pulse {
+    0% { transform: scale(0.95); opacity: 0.8; }
+    50% { transform: scale(1.3); opacity: 1; }
+    100% { transform: scale(0.95); opacity: 0.8; }
+  }
+
+  /* Login Card if unauthenticated */
+  .login-container {
+    max-width: 380px; margin: 80px auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+  }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+  .form-group input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: #fff;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+  }
+  .form-group input:focus { border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+{% if not is_logged_in %}
+<!-- Login Screen -->
+<div class="login-container">
+  <div style="text-align:center; margin-bottom: 24px;">
+    <div class="logo" style="font-size:24px; margin-bottom:6px;">Flask<span>MovieBox</span></div>
+    <div class="badge-admin">Admin Control Panel</div>
+  </div>
+
+  {% if error %}
+  <div style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:16px;">
+    ⚠ {{ error }}
+  </div>
+  {% endif %}
+
+  <form method="POST" action="/admin/login">
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" name="username" placeholder="admin" required autofocus />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" name="password" placeholder="••••••••" required />
+    </div>
+    <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; justify-content:center; font-size:14px; margin-top:8px;">
+      Sign In to Dashboard
+    </button>
+  </form>
+</div>
+
+{% else %}
+<!-- Authenticated Dashboard -->
+<header>
+  <div class="logo-wrap">
+    <div class="logo" onclick="location.href='/'" style="cursor:pointer;">Flask<span>MovieBox</span></div>
+    <span class="badge-admin">Live Tracking</span>
+    <span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-left:8px;">
+      <span class="live-dot"></span> System Live
+    </span>
+  </div>
+  <div class="header-actions">
+    <button class="btn" onclick="location.href='/'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Watch Portal
+    </button>
+    <button class="btn" onclick="fetchDashboardData()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Refresh
+    </button>
+    <button class="btn btn-danger" onclick="confirmClearLogs()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      Clear Logs
+    </button>
+    <button class="btn" onclick="location.href='/admin/logout'" style="color:var(--muted);">
+      Logout
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- KPI Metrics -->
+  <div class="metrics-grid" id="kpiGrid">
+    <div class="kpi-card">
+      <div class="kpi-label">Active Users Now</div>
+      <div class="kpi-val" id="kpiActive" style="color:#10b981;">0</div>
+      <div class="kpi-sub">Streaming in last 10m</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Unique IP Visitors</div>
+      <div class="kpi-val" id="kpiIps">0</div>
+      <div class="kpi-sub"><span id="kpiIps24h">0</span> in last 24 hours</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Watch Streams</div>
+      <div class="kpi-val" id="kpiWatches">0</div>
+      <div class="kpi-sub">Stream & transcode plays</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Downloads</div>
+      <div class="kpi-val" id="kpiDownloads">0</div>
+      <div class="kpi-sub">Direct file downloads</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Searches</div>
+      <div class="kpi-val" id="kpiSearches">0</div>
+      <div class="kpi-sub">Catalog queries tracked</div>
+    </div>
+  </div>
+
+  <!-- Insights Grid -->
+  <div class="insights-grid">
+    <!-- Top Watched Titles -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">🔥 Most Watched Titles</div>
+      </div>
+      <div id="topTitlesList">
+        <div class="skeleton" style="height:32px; margin-bottom:8px;"></div>
+        <div class="skeleton" style="height:32px; margin-bottom:8px;"></div>
+        <div class="skeleton" style="height:32px;"></div>
+      </div>
+    </div>
+
+    <!-- Top Active IP Addresses -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">🌐 Most Active IP Addresses</div>
+      </div>
+      <div id="topIpsList">
+        <div class="skeleton" style="height:32px; margin-bottom:8px;"></div>
+        <div class="skeleton" style="height:32px; margin-bottom:8px;"></div>
+        <div class="skeleton" style="height:32px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity Logs Table Controls -->
+  <div class="table-controls">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <h2 style="font-size:17px; font-weight:700; color:#fff;">Live User Activity Feed</h2>
+      <span id="totalLogsBadge" class="badge badge-page">0 Events</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <input type="text" id="filterSearch" class="search-input" placeholder="Filter by IP, Title, or ID..." oninput="debounceFilter()" />
+      <select id="filterAction" class="select-filter" onchange="applyFilters()">
+        <option value="ALL">All Actions</option>
+        <option value="WATCH_START">Watch Start</option>
+        <option value="STREAM">Stream / Play</option>
+        <option value="DOWNLOAD">Download</option>
+        <option value="SEARCH">Search</option>
+        <option value="PAGE_VIEW">Page View</option>
+      </select>
+      <label style="font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; cursor:pointer;">
+        <input type="checkbox" id="autoRefreshToggle" checked onchange="toggleAutoRefresh()" />
+        Auto-refresh (5s)
+      </label>
+    </div>
+  </div>
+
+  <!-- Activity Logs Table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>IP Address</th>
+          <th>Device / Browser</th>
+          <th>Action</th>
+          <th>Content / Title</th>
+          <th>Quality / Codec</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody id="logsTbody">
+        <tr><td colspan="7" style="text-align:center; padding:30px; color:var(--muted);">Loading tracking activity...</td></tr>
+      </tbody>
+    </table>
+    <div class="pagination" id="paginationBar">
+      <span id="pageInfo">Page 1</span>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="prevPageBtn" onclick="changePage(-1)" disabled>Previous</button>
+        <button class="btn" id="nextPageBtn" onclick="changePage(1)" disabled>Next</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+let currentPage = 1;
+let autoRefreshTimer = null;
+let searchDebounceTimer = null;
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr.replace(' ', 'T') + 'Z');
+  const now = new Date();
+  const diffSec = Math.floor((now - d) / 1000);
+  if (diffSec < 5) return 'Just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  return `${Math.floor(diffSec / 86400)}d ago`;
+}
+
+function getActionBadge(action) {
+  action = (action || '').toUpperCase();
+  if (action === 'WATCH_START') return `<span class="badge badge-watch">▶ Watch</span>`;
+  if (action === 'STREAM') return `<span class="badge badge-stream">⚡ Stream</span>`;
+  if (action === 'DOWNLOAD') return `<span class="badge badge-download">📥 Download</span>`;
+  if (action === 'SEARCH') return `<span class="badge badge-search">🔍 Search</span>`;
+  return `<span class="badge badge-page">${esc(action)}</span>`;
+}
+
+async function fetchStats() {
+  try {
+    const res = await fetch('/api/admin/stats');
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById('kpiActive').textContent = data.active_now || 0;
+    document.getElementById('kpiIps').textContent = data.unique_ips || 0;
+    document.getElementById('kpiIps24h').textContent = data.ips_24h || 0;
+    document.getElementById('kpiWatches').textContent = data.total_watches || 0;
+    document.getElementById('kpiDownloads').textContent = data.total_downloads || 0;
+    document.getElementById('kpiSearches').textContent = data.total_searches || 0;
+
+    // Render Top Titles
+    const titlesEl = document.getElementById('topTitlesList');
+    if (data.top_titles && data.top_titles.length) {
+      titlesEl.innerHTML = data.top_titles.map((t, idx) => `
+        <div class="list-item">
+          <div style="display:flex; align-items:center; gap:10px; overflow:hidden;">
+            <span style="font-weight:700; color:var(--accent); font-size:12px;">#${idx+1}</span>
+            <span style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(t.title)}</span>
+          </div>
+          <span class="badge badge-watch">${t.count} plays</span>
+        </div>
+      `).join('');
+    } else {
+      titlesEl.innerHTML = '<div style="color:var(--muted); font-size:13px; padding:8px 0;">No watch history yet.</div>';
+    }
+
+    // Render Top IPs
+    const ipsEl = document.getElementById('topIpsList');
+    if (data.top_ips && data.top_ips.length) {
+      ipsEl.innerHTML = data.top_ips.map((ip) => `
+        <div class="list-item">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="ip-tag" onclick="filterByIp('${esc(ip.ip)}')">${esc(ip.ip)}</span>
+            <span class="device-tag">${esc(ip.device)} · ${esc(ip.os)}</span>
+          </div>
+          <span style="color:var(--muted); font-size:12px;">${ip.count} events</span>
+        </div>
+      `).join('');
+    } else {
+      ipsEl.innerHTML = '<div style="color:var(--muted); font-size:13px; padding:8px 0;">No active IP logs yet.</div>';
+    }
+  } catch (e) {
+    console.error('fetchStats error:', e);
+  }
+}
+
+async function fetchLogs(page = 1) {
+  currentPage = page;
+  const action = document.getElementById('filterAction').value;
+  const search = document.getElementById('filterSearch').value.trim();
+
+  try {
+    const res = await fetch(`/api/admin/logs?page=${page}&limit=30&action=${encodeURIComponent(action)}&search=${encodeURIComponent(search)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    document.getElementById('totalLogsBadge').textContent = `${data.total || 0} Events`;
+    document.getElementById('pageInfo').textContent = `Page ${data.page} of ${data.pages || 1} (${data.total} total)`;
+    document.getElementById('prevPageBtn').disabled = (data.page <= 1);
+    document.getElementById('nextPageBtn').disabled = (data.page >= data.pages);
+
+    const tbody = document.getElementById('logsTbody');
+    if (!data.logs || !data.logs.length) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--muted);">No matching tracking records found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = data.logs.map(log => {
+      const media = log.media_title ? esc(log.media_title) : (log.subject_id ? `ID: ${esc(log.subject_id)}` : '—');
+      const epInfo = (log.season != null && log.episode != null && (log.season > 0 || log.episode > 0)) ? ` · S${log.season} E${log.episode}` : '';
+      const timeStr = timeAgo(log.created_at);
+      const exactTime = log.created_at || '';
+
+      return `
+        <tr>
+          <td style="white-space:nowrap;" title="${esc(exactTime)}">
+            <div style="font-weight:600; color:#fff;">${timeStr}</div>
+            <div style="font-size:11px; color:var(--muted);">${esc(exactTime)}</div>
+          </td>
+          <td style="white-space:nowrap;">
+            <span class="ip-tag" onclick="filterByIp('${esc(log.ip_address)}')" title="Click to filter by this IP">${esc(log.ip_address)}</span>
+          </td>
+          <td style="white-space:nowrap;">
+            <div style="font-weight:500;">${esc(log.device)} (${esc(log.os)})</div>
+            <div style="font-size:11px; color:var(--muted);">${esc(log.browser)}</div>
+          </td>
+          <td>${getActionBadge(log.action)}</td>
+          <td>
+            <div style="font-weight:600; color:#fff; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              ${media}${epInfo}
+            </div>
+            ${log.subject_id ? `<a href="/watch/${log.subject_id}" target="_blank" style="font-size:11px; color:var(--accent); text-decoration:none;">View Title ↗</a>` : ''}
+          </td>
+          <td style="white-space:nowrap;">
+            ${log.quality ? `<span style="font-weight:600; font-size:12px; background:var(--surface2); padding:2px 6px; border-radius:4px; border:1px solid var(--border);">${esc(log.quality)}</span>` : '—'}
+          </td>
+          <td style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--muted);">
+            ${esc(log.details || '—')}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (e) {
+    console.error('fetchLogs error:', e);
+  }
+}
+
+function fetchDashboardData() {
+  fetchStats();
+  fetchLogs(currentPage);
+}
+
+function applyFilters() {
+  fetchLogs(1);
+}
+
+function debounceFilter() {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    fetchLogs(1);
+  }, 300);
+}
+
+function filterByIp(ip) {
+  document.getElementById('filterSearch').value = ip;
+  fetchLogs(1);
+}
+
+function changePage(delta) {
+  fetchLogs(currentPage + delta);
+}
+
+function toggleAutoRefresh() {
+  const isChecked = document.getElementById('autoRefreshToggle').checked;
+  if (isChecked) {
+    autoRefreshTimer = setInterval(fetchDashboardData, 5000);
+  } else {
+    clearInterval(autoRefreshTimer);
+  }
+}
+
+async function confirmClearLogs() {
+  if (!confirm('Are you sure you want to permanently delete all tracking logs? This cannot be undone.')) return;
+  try {
+    const res = await fetch('/api/admin/clear_logs', { method: 'POST' });
+    if (res.ok) {
+      alert('All activity logs have been cleared.');
+      fetchDashboardData();
+    } else {
+      alert('Failed to clear logs.');
+    }
+  } catch (e) {
+    alert('Network error: ' + e.message);
+  }
+}
+
+// Initial fetch & interval
+fetchDashboardData();
+autoRefreshTimer = setInterval(fetchDashboardData, 5000);
+</script>
+{% endif %}
+
+</body>
+</html>

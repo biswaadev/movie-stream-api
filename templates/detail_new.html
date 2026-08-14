@@ -1232,6 +1232,7 @@ function updateDataMeter() {
 }
 
 let lastSaveTime = 0;
+let watchLogged = false;
 video.addEventListener("timeupdate", () => {
   if (state.drag) return;
   const curTime = (state.seekOffset || 0) + video.currentTime;
@@ -1240,6 +1241,27 @@ video.addEventListener("timeupdate", () => {
   $("progressFill").style.width = Math.min(100, pct) + "%";
   $("timeLabel").textContent = `${fmtTime(curTime)} / ${fmtTime(dur)}`;
   updateDataMeter();
+
+  // Log WATCH event in admin panel when user actively watches 5+ seconds
+  if (!watchLogged && video.currentTime >= 5 && !video.paused) {
+    watchLogged = true;
+    const raw = currentRaw();
+    try {
+      fetch('/api/track', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          action: 'WATCH_START',
+          subject_id: SUBJECT_ID,
+          title: state.model?.title || '',
+          season: (state.season || 0) + 1,
+          episode: (state.ep || 0) + 1,
+          quality: raw ? (raw.resolution ? (raw.resolution + 'p') : (raw.quality || '')) : '',
+          details: 'active_playback'
+        })
+      }).catch(() => {});
+    } catch(e) {}
+  }
 
   // Save progress every 5 seconds
   if (SUBJECT_ID && curTime > 5 && (Date.now() - lastSaveTime > 5000)) {
@@ -1749,6 +1771,7 @@ async function selectSeason(i) {
 
 async function selectEpisode(i) {
   state.ep = i;
+  watchLogged = false;
   const m = state.model;
   const e = currentEp();
   const se = m.seasons[state.season].se;

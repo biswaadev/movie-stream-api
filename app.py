@@ -13,11 +13,97 @@ from flask import (
     request,
     Response,
     send_from_directory,
+    session,
+    redirect,
 )
 import json
+import os
+from functools import wraps
 import movie_api as api
+import tracker
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "moviebox-admin-secret-key-2026")
+
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("admin_auth"):
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# ---------------------------------------------------------------------------
+# Admin & Tracking Routes
+# ---------------------------------------------------------------------------
+@app.route("/admin", methods=["GET"])
+def admin_page():
+    is_logged_in = bool(session.get("admin_auth"))
+    return render_template("admin.html", is_logged_in=is_logged_in)
+
+
+@app.route("/admin/login", methods=["POST"])
+def admin_login():
+    user = request.form.get("username", "").strip()
+    pwd = request.form.get("password", "").strip()
+    if user == ADMIN_USERNAME and pwd == ADMIN_PASSWORD:
+        session["admin_auth"] = True
+        return redirect("/admin")
+    return render_template("admin.html", is_logged_in=False, error="Invalid admin username or password.")
+
+
+@app.route("/admin/logout", methods=["GET"])
+def admin_logout():
+    session.pop("admin_auth", None)
+    return redirect("/admin")
+
+
+@app.route("/api/admin/stats", methods=["GET"])
+@admin_required
+def admin_stats():
+    return jsonify(tracker.get_stats())
+
+
+@app.route("/api/admin/logs", methods=["GET"])
+@admin_required
+def admin_logs():
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 30))
+    action = request.args.get("action", "ALL")
+    search = request.args.get("search", "")
+    return jsonify(tracker.get_logs(page=page, limit=limit, action=action, search=search))
+
+
+@app.route("/api/admin/clear_logs", methods=["POST"])
+@admin_required
+def admin_clear_logs():
+    success = tracker.clear_logs()
+    return jsonify({"success": success})
+
+
+@app.route("/api/track", methods=["POST"])
+def api_track():
+    """Client-side logging hook for watch events & heartbeats."""
+    try:
+        data = request.get_json(silent=True) or {}
+        ip = tracker.get_client_ip(request)
+        action = data.get("action", "STREAM_PING")
+        subject_id = data.get("subject_id", "")
+        media_title = data.get("title", "")
+        season = data.get("season")
+        episode = data.get("episode")
+        quality = data.get("quality", "")
+        details = data.get("details", "")
+        ua = request.headers.get("User-Agent", "")
+        tracker.log_activity(ip, action, subject_id, media_title, season, episode, quality, details, ua)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +124,8 @@ def index():
 @app.route("/watch/<subject_id>")
 def watch(subject_id):
     """Dedicated detail page with a direct player and in-player quality/dub controls."""
+    ip = tracker.get_client_ip(request)
+    tracker.log_activity(ip, "PAGE_VIEW", subject_id=subject_id, user_agent=request.headers.get("User-Agent", ""))
     return render_template("detail_new.html", subject_id=subject_id)
 
 
@@ -59,6 +147,8 @@ def search():
     if not keyword:
         return jsonify({"error": "Empty search keyword"}), 400
     try:
+        ip = tracker.get_client_ip(request)
+        tracker.log_activity(ip, "SEARCH", details=f"q={keyword}", user_agent=request.headers.get("User-Agent", ""))
         data = api.search(keyword, page=page, per_page=per_page, subject_type=subject_type)
         return jsonify(data)
     except Exception as e:  # noqa
@@ -190,6 +280,10 @@ def download():
         return jsonify({"error": "Invalid stream URL"}), 400
     title = request.args.get("title", "video")
     filename = title.replace("/", "_").replace('"', "")
+
+    # Track download event
+    ip = tracker.get_client_ip(request)
+    tracker.log_activity(ip, "DOWNLOAD", media_title=title, details=f"filename={filename}", user_agent=request.headers.get("User-Agent", ""))
 
     headers = {"User-Agent": api.ANDROID_USER_AGENT}
     resp = api._session.get(url, headers=headers, stream=True, timeout=20)
