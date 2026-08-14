@@ -181,7 +181,54 @@ def seasons(subject_id):
         return jsonify({"error": str(e)}), 500
 
 
+import base64
 from concurrent.futures import ThreadPoolExecutor
+
+STREAM_SALT = "mb_stream_v2_salt_2026"
+
+def encode_stream_token(raw_url: str) -> str:
+    """Encrypt raw CDN URL into an opaque URL-safe token with no MovieBox keywords."""
+    if not raw_url:
+        return ""
+    try:
+        salt_bytes = STREAM_SALT.encode("utf-8")
+        raw_bytes = raw_url.encode("utf-8")
+        enc = bytes([b ^ salt_bytes[i % len(salt_bytes)] for i, b in enumerate(raw_bytes)])
+        return base64.urlsafe_b64encode(enc).decode("utf-8").rstrip("=")
+    except Exception:
+        return ""
+
+def decode_stream_token(token: str) -> str:
+    """Decrypt URL-safe token back to the real upstream CDN URL."""
+    if not token:
+        return ""
+    token = token.strip()
+    if token.startswith("http://") or token.startswith("https://"):
+        return token
+    try:
+        if token.endswith(".mp4"):
+            token = token[:-4]
+        pad = len(token) % 4
+        if pad:
+            token += "=" * (4 - pad)
+        enc = base64.urlsafe_b64decode(token)
+        salt_bytes = STREAM_SALT.encode("utf-8")
+        dec = bytes([b ^ salt_bytes[i % len(salt_bytes)] for i, b in enumerate(enc)])
+        url = dec.decode("utf-8")
+        if url.startswith("http://") or url.startswith("https://"):
+            return url
+        return ""
+    except Exception:
+        return ""
+
+
+@app.route("/api/token")
+def get_stream_token():
+    """Convert a raw CDN URL to an encrypted stream token."""
+    raw_url = request.args.get("url", "").strip()
+    token = encode_stream_token(raw_url)
+    return jsonify({"token": token, "streamUrl": f"/stream/v/{token}.mp4" if token else ""})
+
 
 @app.route("/api/resources_dubs")
 def resources_dubs():
@@ -205,7 +252,12 @@ def resources_dubs():
             if dub_id:
                 try:
                     r = api.get_resources(dub_id, se=se, ep=ep)
-                    entry["list"] = r.get("data", r).get("list", [])
+                    raw_list = r.get("data", r).get("list", [])
+                    for item in raw_list:
+                        raw = item.get("resourceLink") or item.get("url") or ""
+                        if raw:
+                            item["token"] = encode_stream_token(raw)
+                    entry["list"] = raw_list
                 except Exception:  # noqa
                     pass
             return entry
@@ -226,7 +278,13 @@ def resources():
     if not subject_id:
         return jsonify({"error": "Missing subjectId"}), 400
     try:
-        return jsonify(api.get_resources(subject_id, se=se, ep=ep))
+        data = api.get_resources(subject_id, se=se, ep=ep)
+        res_list = data.get("data", {}).get("list", []) or data.get("list", [])
+        for item in res_list:
+            raw = item.get("resourceLink") or item.get("url") or ""
+            if raw:
+                item["token"] = encode_stream_token(raw)
+        return jsonify(data)
     except Exception as e:  # noqa
         return jsonify({"error": str(e)}), 500
 
@@ -274,11 +332,13 @@ def image_proxy():
 
 
 @app.route("/download")
-def download():
-    """Full download (200, no Range) with Content-Disposition header."""
-    url = request.args.get("url", "")
-    if not url or "hakunaymatata.com" not in url and "aoneroom" not in url:
-        return jsonify({"error": "Invalid stream URL"}), 400
+@app.route("/download/v/<path:token>")
+def download(token=None):
+    """Full download with Content-Disposition header and encrypted token support."""
+    raw_token = token or request.args.get("t") or request.args.get("token") or request.args.get("url", "")
+    url = decode_stream_token(raw_token)
+    if not url or ("hakunaymatata.com" not in url and "aoneroom" not in url):
+        return jsonify({"error": "Invalid or expired download URL"}), 400
     title = request.args.get("title", "video")
     filename = title.replace("/", "_").replace('"', "")
 
@@ -311,13 +371,15 @@ import shutil
 import subprocess
 
 # ---------------------------------------------------------------------------
-# CDN video proxy — mandatory Android UA + Range forwarding
+# CDN video proxy — mandatory Android UA + Range forwarding + Token Decryption
 # ---------------------------------------------------------------------------
 @app.route("/stream")
-def stream():
-    url = request.args.get("url", "")
+@app.route("/stream/v/<path:token>")
+def stream(token=None):
+    raw_token = token or request.args.get("t") or request.args.get("token") or request.args.get("url", "")
+    url = decode_stream_token(raw_token)
     if not url or not (url.startswith("http://") or url.startswith("https://")):
-        return jsonify({"error": "Invalid stream URL"}), 400
+        return jsonify({"error": "Invalid or expired stream URL"}), 400
 
     range_header = request.headers.get("Range")
     client_ip = request.headers.get("CF-Connecting-IP") or request.headers.get("X-Forwarded-For") or request.remote_addr

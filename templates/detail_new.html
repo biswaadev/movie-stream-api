@@ -1201,12 +1201,31 @@ function getSelectedPlayRaw() {
   return matched;
 }
 
+const STREAM_SALT = "mb_stream_v2_salt_2026";
+
+function encodeStreamToken(str) {
+  if (!str) return "";
+  const salt = STREAM_SALT;
+  let enc = "";
+  for (let i = 0; i < str.length; i++) {
+    enc += String.fromCharCode(str.charCodeAt(i) ^ salt.charCodeAt(i % salt.length));
+  }
+  return btoa(enc).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function getStreamToken(raw) {
+  if (!raw) return "";
+  if (typeof raw === "object" && raw.token) return raw.token;
+  const rawUrl = rawUrlOf(raw);
+  return encodeStreamToken(rawUrl);
+}
+
 function getAbsoluteStreamUrl() {
   const raw = getSelectedPlayRaw();
   if (!raw) return "";
-  const rawUrl = rawUrlOf(raw);
-  if (!rawUrl) return "";
-  return `${window.location.origin}/stream?url=${encodeURIComponent(rawUrl)}`;
+  const token = getStreamToken(raw);
+  if (!token) return "";
+  return `${window.location.origin}/stream/v/${token}.mp4`;
 }
 
 function launchExternalPlayer(type) {
@@ -1278,12 +1297,13 @@ async function copyCurrentStreamLink() {
 function downloadCurrentStream() {
   const raw = getSelectedPlayRaw();
   if (!raw) return;
-  const rawUrl = rawUrlOf(raw);
+  const token = getStreamToken(raw);
+  if (!token) return;
   const m = state.model;
   const e = currentEp();
   const qual = $("playQualitySelect")?.value || "HD";
   const title = (m?.title || "video") + (m?.isSeries ? ` S${state.season+1}E${(e?.num || (state.ep+1))}` : "") + ` (${qual})`;
-  location.href = `/download?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(title)}`;
+  location.href = `/download/v/${token}.mp4?title=${encodeURIComponent(title)}`;
 }
 
 
@@ -1575,8 +1595,9 @@ function updateDlSummary() {
 function downloadSingleFile(idx) {
   const item = dlEpData[idx];
   if (!item || !item.url) return;
+  const token = encodeStreamToken(item.url);
   const a = document.createElement("a");
-  a.href = `/download?url=${encodeURIComponent(item.url)}&title=${encodeURIComponent(item.title)}`;
+  a.href = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -1590,8 +1611,9 @@ function downloadSelectedBatch() {
   toast(`Starting batch download of ${selected.length} files...`);
   selected.forEach((item, i) => {
     setTimeout(() => {
+      const token = encodeStreamToken(item.url);
       const a = document.createElement("a");
-      a.href = `/download?url=${encodeURIComponent(item.url)}&title=${encodeURIComponent(item.title)}`;
+      a.href = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
