@@ -1258,7 +1258,34 @@ function launchExternalPlayer(type) {
   const isPC = !isAndroid && !isIOS;
 
   if (isPC) {
-    copyCurrentStreamLink();
+    const m = state.model;
+    const e = currentEp();
+    const qual = $("playQualitySelect")?.value || "HD";
+    const title = (m?.title || "video") + (m?.isSeries ? ` S${state.season+1}E${(e?.num || (state.ep+1))}` : "") + ` (${qual})`;
+
+    // 1. Copy stream URL to clipboard
+    try { navigator.clipboard.writeText(streamUrl); } catch(err) {}
+
+    // 2. Direct URI scheme launch for VLC desktop protocol
+    try {
+      window.location.href = `vlc://${streamUrl}`;
+    } catch(err) {}
+
+    // 3. Instant .m3u playlist shortcut file for 1-click native desktop launch
+    setTimeout(() => {
+      const m3uContent = `#EXTM3U\n#EXTINF:-1,${title}\n${streamUrl}\n`;
+      const blob = new Blob([m3uContent], { type: "audio/x-mpegurl" });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `${title.replace(/[^a-zA-Z0-9_-]/g, "_")}.m3u`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+    }, 150);
+
+    toast("Opening VLC Player & copied link to clipboard");
     return;
   }
 
