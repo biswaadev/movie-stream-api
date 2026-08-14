@@ -387,6 +387,10 @@ def stream_transcode():
             "ffmpeg",
             "-hide_banner",
             "-loglevel", "error",
+            "-reconnect", "1",
+            "-reconnect_at_eof", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
         ]
         try:
             ss_val = float(ss)
@@ -405,6 +409,8 @@ def stream_transcode():
             "-sn",
             "-dn",
             "-c:v", "libx264",
+            "-profile:v", "baseline",
+            "-level", "3.0",
             "-preset", "ultrafast",
             "-tune", "zerolatency",
             "-threads", "0",

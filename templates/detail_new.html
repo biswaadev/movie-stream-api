@@ -428,7 +428,7 @@
           <button id="nextCancelBtn" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;">Cancel</button>
         </div>
       </div>
-      <div id="bufferingSpinner" style="display:none;position:absolute;inset:0;z-index:15;background:rgba(0,0,0,0.85);flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
+      <div id="bufferingSpinner" style="display:none;position:absolute;inset:0;z-index:15;background:transparent;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
         <div style="width:56px;height:56px;border:4px solid rgba(255,255,255,0.18);border-top:4px solid var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;box-shadow:0 0 18px rgba(229,9,20,0.7);"></div>
         <span style="color:#fff;font-size:12px;font-weight:700;margin-top:12px;letter-spacing:0.6px;text-shadow:0 2px 6px rgba(0,0,0,0.8)">Buffering...</span>
       </div>
@@ -1079,16 +1079,17 @@ document.addEventListener("keydown", e => { if (e.code === "Space" && e.target.t
 video.addEventListener("play", () => {
   state.playing = true;
   updatePlayUI();
+  $("bufferingSpinner").style.display = "none";
   saveToWatchHistory((state.seekOffset || 0) + video.currentTime, getDur());
 });
 video.addEventListener("pause", () => { state.playing = false; updatePlayUI(); });
 video.addEventListener("loadstart", () => { $("bufferingSpinner").style.display = "flex"; });
 video.addEventListener("seeking", () => { $("bufferingSpinner").style.display = "flex"; });
 video.addEventListener("waiting", () => { $("bufferingSpinner").style.display = "flex"; });
-video.addEventListener("stalled", () => { $("bufferingSpinner").style.display = "flex"; });
 video.addEventListener("seeked", () => { $("bufferingSpinner").style.display = "none"; });
 video.addEventListener("playing", () => { $("bufferingSpinner").style.display = "none"; });
 video.addEventListener("canplay", () => { $("bufferingSpinner").style.display = "none"; });
+video.addEventListener("loadeddata", () => { $("bufferingSpinner").style.display = "none"; });
 video.addEventListener("progress", updateDataMeter);
 video.addEventListener("error", () => {
   $("bufferingSpinner") && ($("bufferingSpinner").style.display = "none");
