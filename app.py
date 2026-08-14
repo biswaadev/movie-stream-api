@@ -283,7 +283,7 @@ def stream_transcode():
 
     try:
         ss = request.args.get("ss", "0").strip()
-        headers_str = f"User-Agent: {api.ANDROID_USER_AGENT}\r\n\r\n"
+        headers_str = f"User-Agent: {api.ANDROID_USER_AGENT}\r\n"
 
         cmd = [
             "ffmpeg",
