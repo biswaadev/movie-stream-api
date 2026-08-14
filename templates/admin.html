@@ -281,8 +281,9 @@
   </div>
 
   {% if error %}
-  <div style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:16px;">
-    ⚠ {{ error }}
+  <div style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:16px; display:flex; align-items:center; gap:6px;">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span>{{ error }}</span>
   </div>
   {% endif %}
 
@@ -462,10 +463,10 @@ function timeAgo(dateStr) {
 
 function getActionBadge(action) {
   action = (action || '').toUpperCase();
-  if (action === 'WATCH_START') return `<span class="badge badge-watch">▶ Watch</span>`;
-  if (action === 'STREAM') return `<span class="badge badge-stream">⚡ Stream</span>`;
-  if (action === 'DOWNLOAD') return `<span class="badge badge-download">📥 Download</span>`;
-  if (action === 'SEARCH') return `<span class="badge badge-search">🔍 Search</span>`;
+  if (action === 'WATCH_START') return `<span class="badge badge-watch"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:4px;"><path d="M8 5v14l11-7z"/></svg>Watch</span>`;
+  if (action === 'STREAM') return `<span class="badge badge-stream"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Stream</span>`;
+  if (action === 'DOWNLOAD') return `<span class="badge badge-download"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</span>`;
+  if (action === 'SEARCH') return `<span class="badge badge-search"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Search</span>`;
   return `<span class="badge badge-page">${esc(action)}</span>`;
 }
 

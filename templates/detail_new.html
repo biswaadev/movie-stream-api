@@ -511,31 +511,36 @@
       <!-- Primary Action: Open in Video Player (Direct Phone Launch) -->
       <button onclick="launchExternalPlayer('auto')" style="background:linear-gradient(135deg, #e50914 0%, #b80610 100%);color:#fff;border:none;border-radius:12px;padding:14px 20px;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 20px rgba(229,9,20,0.4);transition:transform .15s;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        <span>🚀 Open in App (VLC / MX Player)</span>
+        <span>Open in App (VLC / MX Player)</span>
       </button>
 
       <!-- App Chooser Grid -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <!-- VLC Button -->
         <button onclick="launchExternalPlayer('vlc')" style="background:var(--surface2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:10px;padding:12px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center;transition:background .15s;" onmouseover="this.style.background='rgba(255,102,0,0.2)'" onmouseout="this.style.background='var(--surface2)'">
-          <span style="font-size:16px;">🟠</span> VLC Player
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff7700"><path d="M12 2L4 18h16L12 2zm0 4.5l4.5 9h-9l4.5-9zm-6.5 13.5l-1.5 3h16l-1.5-3H5.5z"/></svg>
+          <span>VLC Player</span>
         </button>
 
         <!-- MX Player Button -->
         <button onclick="launchExternalPlayer('mx')" style="background:var(--surface2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:10px;padding:12px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center;transition:background .15s;" onmouseover="this.style.background='rgba(0,153,255,0.2)'" onmouseout="this.style.background='var(--surface2)'">
-          <span style="font-size:16px;">🔵</span> MX Player
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#0099ff"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+          <span>MX Player</span>
         </button>
       </div>
 
       <!-- PC Primary 1-Click Copy Stream URL Button -->
       <button onclick="copyCurrentStreamLink()" style="background:rgba(30,144,255,0.15);border:1px solid rgba(30,144,255,0.4);color:#6cb3f7;border-radius:10px;padding:12px 14px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center;transition:background .15s;" onmouseover="this.style.background='rgba(30,144,255,0.25)'" onmouseout="this.style.background='rgba(30,144,255,0.15)'">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-        <span>📋 Copy Link for PC VLC (Ctrl + N)</span>
+        <span>Copy Link for PC VLC (Ctrl + N)</span>
       </button>
 
       <!-- Tip for PC -->
       <div id="playerHintBox" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--muted);line-height:1.5;">
-        <span style="color:#ffc107;font-weight:700;">💡 PC / Laptop VLC Streaming:</span>
+        <span style="color:#ffc107;font-weight:700;display:inline-flex;align-items:center;gap:5px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffc107" stroke-width="2"><path d="M9 18h6m-4 4h2a8 8 0 1 1 5.3-14c-.6.6-1.3 1.5-1.3 2.5V13a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.5c0-1-.7-1.9-1.3-2.5A8 8 0 0 1 11 2"/></svg>
+          PC / Laptop VLC Streaming:
+        </span>
         <div id="playerHintText" style="margin-top:4px;">
           Click <strong>Copy Link</strong>, open VLC Media Player, then press <code>Ctrl + N</code> (or <em>Media &gt; Open Network Stream</em>) and hit <strong>Enter</strong>.
         </div>
@@ -609,7 +614,8 @@
         Total: <strong id="dlTotalSize" style="color:#1e90ff;font-size:14px;">0 MB</strong> <span id="dlTotalCount" style="font-size:11px;">(0 selected)</span>
       </div>
       <button id="dlBatchBtn" onclick="downloadSelectedBatch()" style="background:#e50914;color:#fff;border:none;border-radius:10px;padding:11px 22px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(229,9,20,0.4);transition:all .15s;">
-        ⚡ Download Selected
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Download Selected</span>
       </button>
     </div>
 
@@ -986,14 +992,14 @@ function renderLangMenu() {
   const origSummary = getQualitiesSummary(state.baseList);
   $("langMenu").innerHTML =
     `<button class="menu-item ${!state.curDub ? "active" : ""}" onclick="resetLang()">
-      <span class="check">${!state.curDub ? "✓" : "&nbsp;&nbsp;"}</span>🌐 Original
+      <span class="check">${!state.curDub ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : "&nbsp;&nbsp;"}</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>Original
       <span style="margin-left:auto;background:rgba(255,255,255,0.08);padding:2px 8px;border-radius:6px;color:#7bd88f;font-size:11px">${origSummary}</span>
     </button>` +
     dubs.map((d, i) => {
       const qSummary = getQualitiesSummary(d.list || []);
       const active = String(d.subjectId) === String(state.curDub || '');
       return `<button class="menu-item ${active ? "active" : ""}" onclick="applyLang(${i})">
-        <span class="check">${active ? "✓" : "&nbsp;&nbsp;"}</span>🎙️ ${esc(d.lanName || ("Dub " + (i + 1)))}
+        <span class="check">${active ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : "&nbsp;&nbsp;"}</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>${esc(d.lanName || ("Dub " + (i + 1)))}
         <span style="margin-left:auto;background:rgba(255,255,255,0.08);padding:2px 8px;border-radius:6px;color:#7bd88f;font-size:11px">${qSummary}</span>
       </button>`;
     }).join("");
@@ -1565,8 +1571,9 @@ async function renderDownloadEpisodes() {
             </div>
           </div>
         </label>
-        <button onclick="downloadSingleFile(${item.index})" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .15s;" onmouseover="this.style.background='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">
-          ⬇ Download
+        <button onclick="downloadSingleFile(${item.index})" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .15s;display:inline-flex;align-items:center;gap:4px;" onmouseover="this.style.background='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Download</span>
         </button>
       </div>
     `;
@@ -1600,7 +1607,7 @@ function updateDlSummary() {
   if (batchBtn) {
     batchBtn.disabled = selected.length === 0;
     batchBtn.style.opacity = selected.length === 0 ? "0.4" : "1";
-    batchBtn.innerHTML = `⚡ Download Selected (${selected.length})`;
+    batchBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download Selected (${selected.length})</span>`;
   }
 }
 
