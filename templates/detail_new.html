@@ -485,9 +485,10 @@
       </div>
       <div class="genres" id="genres"></div>
       <div class="meta-actions">
+        <button class="act-btn play-app" id="playAppBtn" style="background:#e50914;color:#fff;border-color:#e50914;font-weight:700;box-shadow:0 4px 16px rgba(229,9,20,0.4);"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:5px"><path d="M8 5v14l11-7z"/></svg><span id="playAppText">▶ Play in App</span></button>
+        <button class="act-btn download" id="dlBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span id="dlText">Download</span></button>
         <button class="act-btn watchlist" id="wlBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span id="wlText">Watchlist</span></button>
         <button class="act-btn share" id="shareBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>Share</button>
-        <button class="act-btn download" id="dlBtn" style="background:#e50914;color:#fff;border-color:#e50914;font-weight:700;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span id="dlText">Download</span></button>
       </div>
     </div>
 
@@ -510,6 +511,83 @@
   </section>
 
 </main>
+
+<!-- Stream & External Player Hub Modal -->
+<div class="modal-backdrop" id="playModalBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)closePlayModal();">
+  <div style="background:var(--surface);border:1px solid rgba(255,255,255,0.12);border-radius:16px;width:100%;max-width:620px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.85);animation:rise 0.2s ease;">
+
+    <!-- Modal Header -->
+    <div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.02);">
+      <div>
+        <h3 id="playModalTitle" style="font-size:17px;font-weight:700;color:#fff;margin:0;display:flex;align-items:center;gap:8px;">
+          <span style="color:#e50914;">▶</span> Stream in Player App
+        </h3>
+        <p id="playModalSub" style="font-size:12px;color:var(--muted);margin-top:2px;">Select quality & audio to stream in VLC, MX Player, or any app</p>
+      </div>
+      <button onclick="closePlayModal()" style="background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;line-height:1;">×</button>
+    </div>
+
+    <!-- Selectors: Episode, Audio/Dub, Quality -->
+    <div style="padding:14px 20px;background:var(--surface2);border-bottom:1px solid rgba(255,255,255,0.06);display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:10px;">
+      <div id="playSeasonWrap">
+        <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;">Season</label>
+        <select id="playSeasonSelect" style="width:100%;background:var(--bg);color:#fff;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:9px 12px;font-size:13px;font-weight:600;outline:none;cursor:pointer;" onchange="onPlaySeasonChange()"></select>
+      </div>
+      <div id="playEpWrap">
+        <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;">Episode</label>
+        <select id="playEpSelect" style="width:100%;background:var(--bg);color:#fff;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:9px 12px;font-size:13px;font-weight:600;outline:none;cursor:pointer;" onchange="onPlayEpChange()"></select>
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;">Audio / Dub</label>
+        <select id="playDubSelect" style="width:100%;background:var(--bg);color:#fff;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:9px 12px;font-size:13px;font-weight:600;outline:none;cursor:pointer;" onchange="onPlayDubChange()"></select>
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;">Quality</label>
+        <select id="playQualitySelect" style="width:100%;background:var(--bg);color:#fff;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:9px 12px;font-size:13px;font-weight:600;outline:none;cursor:pointer;" onchange="onPlayQualityChange()"></select>
+      </div>
+    </div>
+
+    <!-- Streaming Actions Container -->
+    <div style="padding:20px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;">
+      
+      <!-- Primary Player Action Button (Universal Chooser) -->
+      <button onclick="launchExternalPlayer('auto')" style="background:linear-gradient(135deg, #e50914 0%, #b80610 100%);color:#fff;border:none;border-radius:12px;padding:14px 20px;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 20px rgba(229,9,20,0.4);transition:transform .15s;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <span>🚀 Open in Video Player (VLC / MX Player)</span>
+      </button>
+
+      <!-- Secondary App Grid -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:10px;margin-top:4px;">
+        <!-- VLC Button -->
+        <button onclick="launchExternalPlayer('vlc')" style="background:var(--surface2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:10px;padding:12px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center;transition:background .15s;" onmouseover="this.style.background='rgba(255,102,0,0.2)'" onmouseout="this.style.background='var(--surface2)'">
+          <span style="font-size:16px;">🟠</span> VLC Player
+        </button>
+
+        <!-- MX Player Button -->
+        <button onclick="launchExternalPlayer('mx')" style="background:var(--surface2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:10px;padding:12px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center;transition:background .15s;" onmouseover="this.style.background='rgba(0,153,255,0.2)'" onmouseout="this.style.background='var(--surface2)'">
+          <span style="font-size:16px;">🔵</span> MX Player
+        </button>
+
+        <!-- Copy Link Button -->
+        <button onclick="copyCurrentStreamLink()" style="background:var(--surface2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:10px;padding:12px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center;transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='var(--surface2)'">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Copy URL
+        </button>
+      </div>
+
+      <!-- Quick Download & Web Player Row -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);">
+        <button onclick="downloadCurrentStream()" style="background:none;border:none;color:#1e90ff;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Direct Download (<span id="playFileSizeLabel">—</span>)
+        </button>
+        <button onclick="playInWebPlayer()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;">
+          🌐 Play in Browser Instead
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
 
 <!-- Batch Download Modal -->
 <div class="modal-backdrop" id="dlModalBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;align-items:center;justify-content:center;padding:16px;" onclick="if(event.target===this)closeDownloadModal();">
@@ -778,8 +856,13 @@ function renderEpisodes() {
   $("epGrid").innerHTML = eps.map((e, i) => {
     const epNum = e.num || (i + 1);
     const titleAttr = esc(e.name ? `Episode ${epNum}: ${e.name}` : `Episode ${epNum}`);
-    return `<button class="ep-box ${i === state.ep ? "active" : ""}" onclick="selectEpisode(${i})" title="${titleAttr}">${epNum}</button>`;
+    return `<button class="ep-box ${i === state.ep ? "active" : ""}" onclick="onEpisodeClick(${i})" title="${titleAttr}">${epNum}</button>`;
   }).join("");
+}
+
+function onEpisodeClick(i) {
+  selectEpisode(i);
+  openPlayModal(i);
 }
 
 function renderCast() {
@@ -1428,6 +1511,271 @@ player.addEventListener("mousemove", wakeIdle);
 player.addEventListener("pointermove", wakeIdle);
 video.addEventListener("play", wakeIdle);
 video.addEventListener("pause", () => { player.classList.remove("idle"); clearTimeout(idleTimer); });
+
+if ($("playAppBtn")) {
+  $("playAppBtn").addEventListener("click", () => openPlayModal());
+}
+if ($("bigPlay")) {
+  $("bigPlay").addEventListener("click", () => openPlayModal());
+}
+
+/* ---------- External Player & Stream Hub Modal ---------- */
+function openPlayModal(epIdx = null) {
+  const modal = $("playModalBackdrop");
+  if (!modal) return;
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+
+  const m = state.model;
+  if (!m) return;
+
+  if (epIdx != null && !isNaN(epIdx)) {
+    state.ep = epIdx;
+  }
+
+  // Update modal title
+  const e = currentEp() || { num: state.ep + 1, name: `Episode ${state.ep + 1}` };
+  const epLabel = m.isSeries ? `S${state.season + 1} E${e.num} · ${e.name}` : m.title;
+  if ($("playModalTitle")) $("playModalTitle").innerHTML = `<span style="color:#e50914;">▶</span> ${esc(epLabel)}`;
+
+  // Season dropdown
+  const seWrap = $("playSeasonWrap");
+  const seSel = $("playSeasonSelect");
+  if (seSel) {
+    if (m.seasons && m.seasons.length > 1) {
+      if (seWrap) seWrap.style.display = "block";
+      seSel.innerHTML = m.seasons.map((s, i) => `<option value="${i}" ${i === state.season ? 'selected' : ''}>${esc(s.label)}</option>`).join('');
+    } else {
+      if (seWrap) seWrap.style.display = "none";
+    }
+  }
+
+  // Episode dropdown
+  populatePlayEpisodes();
+
+  // Dub dropdown
+  populatePlayDubs();
+
+  // Quality dropdown
+  updatePlayQualities();
+}
+
+function closePlayModal() {
+  if ($("playModalBackdrop")) $("playModalBackdrop").style.display = "none";
+  document.body.style.overflow = "";
+}
+
+function populatePlayEpisodes() {
+  const epWrap = $("playEpWrap");
+  const epSel = $("playEpSelect");
+  const m = state.model;
+  if (!epSel || !m) return;
+
+  const eps = m.seasons[state.season]?.eps || [];
+  if (eps.length > 1) {
+    if (epWrap) epWrap.style.display = "block";
+    epSel.innerHTML = eps.map((e, i) => `<option value="${i}" ${i === state.ep ? 'selected' : ''}>${esc(`E${e.num || (i+1)}: ${e.name || `Episode ${i+1}`}`)}</option>`).join('');
+  } else {
+    if (epWrap) epWrap.style.display = "none";
+  }
+}
+
+function populatePlayDubs() {
+  const dubSel = $("playDubSelect");
+  if (dubSel) {
+    const opts = [
+      { id: '', name: 'Original Audio' },
+      ...(state.dubLists || []).map(d => ({ id: String(d.subjectId), name: d.lanName || 'Dubbed Audio' }))
+    ];
+    dubSel.innerHTML = opts.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('');
+    dubSel.value = state.curDub || '';
+  }
+}
+
+function updatePlayQualities() {
+  const qualSel = $("playQualitySelect");
+  if (!qualSel) return;
+
+  const chosenDub = $("playDubSelect")?.value || '';
+  let targetDubList = state.baseList || [];
+  if (chosenDub) {
+    const found = state.dubLists.find(d => String(d.subjectId) === String(chosenDub));
+    if (found && found.list) targetDubList = found.list;
+  }
+
+  const realResSet = new Set();
+  targetDubList.forEach(r => {
+    const res = parseInt(r.resolution, 10);
+    if (res) realResSet.add(res + 'p');
+    else if (r.quality) realResSet.add(String(r.quality));
+  });
+
+  let realArr = Array.from(realResSet).sort((a, b) => parseInt(b) - parseInt(a));
+  if (!realArr.length) {
+    realArr = state.options.map(o => o.label.replace(' (HEVC)', ''));
+  }
+  if (!realArr.length) realArr = ["1080p", "720p", "480p"];
+
+  const prevVal = qualSel.value;
+  qualSel.innerHTML = realArr.map(q => `<option value="${q}">${esc(q)} HD</option>`).join('');
+  if (realArr.includes(prevVal)) qualSel.value = prevVal;
+  else qualSel.value = realArr[0];
+
+  updatePlayFileSize();
+}
+
+function updatePlayFileSize() {
+  const raw = getSelectedPlayRaw();
+  const sizeLabel = $("playFileSizeLabel");
+  if (!sizeLabel) return;
+  if (raw && raw.size) {
+    const mb = Math.round(raw.size / (1024 * 1024));
+    sizeLabel.textContent = mb >= 1000 ? `${(mb / 1024).toFixed(2)} GB` : `${mb} MB`;
+  } else {
+    sizeLabel.textContent = 'MP4 Fast';
+  }
+}
+
+function getSelectedPlayRaw() {
+  const chosenDub = $("playDubSelect")?.value || '';
+  const chosenQual = $("playQualitySelect")?.value || '';
+
+  let targetDubList = state.baseList || [];
+  if (chosenDub) {
+    const found = state.dubLists.find(d => String(d.subjectId) === String(chosenDub));
+    if (found && found.list) targetDubList = found.list;
+  }
+
+  const matched = targetDubList.find(r => (parseInt(r.resolution, 10) || 0) === parseInt(chosenQual, 10)) || targetDubList[0] || currentRaw();
+  return matched;
+}
+
+function getAbsoluteStreamUrl() {
+  const raw = getSelectedPlayRaw();
+  if (!raw) return "";
+  const rawUrl = rawUrlOf(raw);
+  if (!rawUrl) return "";
+  return `${window.location.origin}/stream?url=${encodeURIComponent(rawUrl)}`;
+}
+
+function launchExternalPlayer(type) {
+  const streamUrl = getAbsoluteStreamUrl();
+  if (!streamUrl) {
+    toast("Please wait, loading stream link...");
+    return;
+  }
+
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  toast("Opening in player app...");
+
+  if (type === 'auto') {
+    if (isAndroid) {
+      const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
+      window.location.href = intentUrl;
+    } else {
+      window.location.href = `vlc://${streamUrl}`;
+    }
+  } else if (type === 'vlc') {
+    if (isAndroid) {
+      const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end`;
+      window.location.href = intentUrl;
+      setTimeout(() => { window.location.href = `vlc://${streamUrl}`; }, 800);
+    } else {
+      window.location.href = `vlc://${streamUrl}`;
+    }
+  } else if (type === 'mx') {
+    if (isAndroid) {
+      const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.ad;end`;
+      window.location.href = intentUrl;
+    } else {
+      window.location.href = `vlc://${streamUrl}`;
+    }
+  }
+}
+
+async function copyCurrentStreamLink() {
+  const streamUrl = getAbsoluteStreamUrl();
+  if (!streamUrl) {
+    toast("No stream URL available");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(streamUrl);
+    toast("✓ Stream URL copied! Paste in VLC (Media > Open Network Stream)");
+  } catch {
+    prompt("Copy this stream URL:", streamUrl);
+  }
+}
+
+function downloadCurrentStream() {
+  const raw = getSelectedPlayRaw();
+  if (!raw) return;
+  const rawUrl = rawUrlOf(raw);
+  const m = state.model;
+  const e = currentEp();
+  const qual = $("playQualitySelect")?.value || "HD";
+  const title = (m?.title || "video") + (m?.isSeries ? ` S${state.season+1}E${(e?.num || (state.ep+1))}` : "") + ` (${qual})`;
+  location.href = `/download?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(title)}`;
+}
+
+function playInWebPlayer() {
+  closePlayModal();
+  applyStream(true);
+}
+
+async function onPlaySeasonChange() {
+  const seSel = $("playSeasonSelect");
+  if (!seSel) return;
+  state.season = parseInt(seSel.value, 10) || 0;
+  state.ep = 0;
+  renderSeasons();
+  renderEpisodes();
+  populatePlayEpisodes();
+
+  const m = state.model;
+  const e = m.seasons[state.season]?.eps[0] || { num: 1 };
+  const seNum = m.seasons[state.season]?.se ?? state.season;
+
+  try {
+    await fetchEpisodeResources(seNum, e.num || 1, false);
+  } catch(err) {}
+
+  populatePlayDubs();
+  updatePlayQualities();
+}
+
+async function onPlayEpChange() {
+  const epSel = $("playEpSelect");
+  if (!epSel) return;
+  state.ep = parseInt(epSel.value, 10) || 0;
+  renderEpisodes();
+
+  const m = state.model;
+  const e = currentEp() || { num: state.ep + 1 };
+  const seNum = m.seasons[state.season]?.se ?? state.season;
+
+  if ($("playModalTitle")) {
+    const epLabel = m.isSeries ? `S${state.season + 1} E${e.num} · ${e.name}` : m.title;
+    $("playModalTitle").innerHTML = `<span style="color:#e50914;">▶</span> ${esc(epLabel)}`;
+  }
+
+  try {
+    await fetchEpisodeResources(seNum, e.num || 1, false);
+  } catch(err) {}
+
+  populatePlayDubs();
+  updatePlayQualities();
+}
+
+function onPlayDubChange() {
+  updatePlayQualities();
+}
+
+function onPlayQualityChange() {
+  updatePlayFileSize();
+}
 
 $("dlBtn").addEventListener("click", () => {
   openDownloadModal();
