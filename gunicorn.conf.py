@@ -1,8 +1,9 @@
 # Gunicorn Production Configuration for High Concurrency (10,000+ Concurrent Streams)
 import multiprocessing
+import os
 
-bind = "0.0.0.0:5000"
-workers = multiprocessing.cpu_count() * 2 + 1
+bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"
+workers = min(multiprocessing.cpu_count() * 2 + 1, 8)
 worker_class = "gevent"
 worker_connections = 2000
 timeout = 60
