@@ -490,10 +490,10 @@
 
       <!-- Device specific helpful hint -->
       <div id="playerHintBox" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--muted);line-height:1.5;margin-top:2px;">
-        <span style="color:#ffc107;font-weight:700;">💡 Tip for PC & Phone:</span>
+        <span style="color:#ffc107;font-weight:700;">💡 Instant Stream in External Player:</span>
         <div id="playerHintText" style="margin-top:4px;">
-          • <strong>PC/Laptop:</strong> VLC button generates a <code>.m3u</code> playlist file. Double-click it to start streaming in VLC/PotPlayer, or in VLC press <code>Ctrl+N</code> & Enter (Stream link is auto-copied).<br/>
-          • <strong>Android Phone:</strong> Click VLC or MX Player. If MX Player is missing, you can install it or open in your phone's default player.
+          • <strong>Phone (Android):</strong> Click VLC, MX Player, or Open in Player to launch directly into your installed video app.<br/>
+          • <strong>PC / Laptop:</strong> Click VLC to open VLC Media Player directly, or copy the URL to stream anywhere.
         </div>
       </div>
 
@@ -1161,20 +1161,15 @@ function launchExternalPlayer(type) {
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const isPC = !isAndroid && !isIOS;
 
-  const m = state.model;
-  const e = currentEp();
-  const title = (m?.title || "Video") + (m?.isSeries ? ` S${state.season+1}E${e?.num || (state.ep+1)}` : "");
-
   if (isPC) {
-    // 1. Copy URL to clipboard
     navigator.clipboard.writeText(streamUrl).catch(() => {});
-    // 2. Generate .m3u playlist file for instant 1-click launch in VLC / PotPlayer
-    downloadM3U(streamUrl, title);
-    // 3. Try custom protocol if VLC is chosen
     if (type === 'vlc') {
       window.location.href = `vlc://${streamUrl}`;
+      toast("🚀 Opening VLC Player... (Stream URL copied to clipboard)");
+    } else {
+      window.location.href = `vlc://${streamUrl}`;
+      toast("🚀 Opening Player... (Stream URL copied to clipboard)");
     }
-    toast("✓ .m3u playlist downloaded! Open it to stream in VLC, or in VLC press Ctrl+N and Enter (Link copied)");
     return;
   }
 
@@ -1186,7 +1181,7 @@ function launchExternalPlayer(type) {
       window.location.href = intentUrl;
       setTimeout(() => {
         if (Date.now() - startTime < 2000) {
-          if (confirm("MX Player aapke phone me install nahi hai! Kya aap Play Store se install karna chahte hain?")) {
+          if (confirm("MX Player aapke phone me install nahi hai! Kya aap Play Store se install karna chahte hain, ya doosre video player me play karein?")) {
             window.location.href = "https://play.google.com/store/apps/details?id=com.mxtech.videoplayer.ad";
           } else {
             window.location.href = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
@@ -1199,7 +1194,7 @@ function launchExternalPlayer(type) {
       window.location.href = intentUrl;
       setTimeout(() => {
         if (Date.now() - startTime < 2000) {
-          if (confirm("VLC Player aapke phone me install nahi hai! Kya aap Play Store se install karna chahte hain?")) {
+          if (confirm("VLC Player aapke phone me install nahi hai! Kya aap Play Store se install karna chahte hain, ya doosre video player me play karein?")) {
             window.location.href = "https://play.google.com/store/apps/details?id=org.videolan.vlc";
           } else {
             window.location.href = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
@@ -1217,20 +1212,6 @@ function launchExternalPlayer(type) {
       window.location.href = `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(streamUrl)}`;
     }, 500);
   }
-}
-
-function downloadM3U(streamUrl, title) {
-  const cleanTitle = (title || "stream").replace(/[\\/:*?"<>|]/g, '_');
-  const content = `#EXTM3U\n#EXTINF:-1,${cleanTitle}\n${streamUrl}\n`;
-  const blob = new Blob([content], { type: 'audio/x-mpegurl' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${cleanTitle}.m3u`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 async function copyCurrentStreamLink() {
