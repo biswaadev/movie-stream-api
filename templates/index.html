@@ -405,10 +405,29 @@
       gap: 10px !important;
     }
   }
-  @media (max-width: 640px) {
-    .modal-hero { flex-direction: column; }
-    .modal-hero .poster { width: 140px; }
-    .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+  /* Skeleton Loading Styles */
+  @keyframes skeleton-shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.03) 75%) !important;
+    background-size: 200% 100% !important;
+    animation: skeleton-shimmer 1.5s infinite linear !important;
+    border-radius: 6px;
+    color: transparent !important;
+    user-select: none;
+    pointer-events: none;
+  }
+  .skeleton-card {
+    background: var(--surface);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.05);
+    display: flex; flex-direction: row;
+    align-items: stretch;
+    min-height: 165px;
+    pointer-events: none;
   }
 </style>
 </head>
@@ -562,9 +581,38 @@ function optimizeImgUrl(url, w = 160, q = 60) {
   return url;
 }
 
+function renderSearchSkeleton(count = 6) {
+  stateEl.innerHTML = `<div class="skeleton" style="width: 220px; height: 26px; margin-bottom: 18px; border-radius: 6px;"></div>`;
+  resultsEl.innerHTML = `<div class="grid">` + Array(count).fill(0).map(() => `
+    <div class="skeleton-card">
+      <div class="poster skeleton" style="width:120px; min-width:120px; height:100%; min-height:165px; border-radius:0;"></div>
+      <div class="info" style="gap:10px; padding:16px 18px; width:100%;">
+        <div class="row-top" style="justify-content:space-between; align-items:center;">
+          <div class="skeleton" style="width:45%; height:20px; border-radius:6px;"></div>
+          <div class="skeleton" style="width:75px; height:28px; border-radius:8px;"></div>
+        </div>
+        <div class="meta-row" style="gap:8px; margin:2px 0;">
+          <div class="skeleton" style="width:45px; height:18px; border-radius:4px;"></div>
+          <div class="skeleton" style="width:75px; height:18px; border-radius:4px;"></div>
+          <div class="skeleton" style="width:40px; height:18px; border-radius:4px;"></div>
+          <div class="skeleton" style="width:60px; height:18px; border-radius:4px;"></div>
+        </div>
+        <div style="display:flex; gap:6px; margin:2px 0;">
+          <div class="skeleton" style="width:65px; height:20px; border-radius:12px;"></div>
+          <div class="skeleton" style="width:80px; height:20px; border-radius:12px;"></div>
+          <div class="skeleton" style="width:55px; height:20px; border-radius:12px;"></div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:2px;">
+          <div class="skeleton" style="width:96%; height:13px; border-radius:4px;"></div>
+          <div class="skeleton" style="width:80%; height:13px; border-radius:4px;"></div>
+        </div>
+      </div>
+    </div>
+  `).join('') + `</div>`;
+}
+
 function showLoading() {
-  stateEl.innerHTML = '<div class="loading"><div class="spinner"></div>Fetching from the catalog...</div>';
-  resultsEl.innerHTML = '';
+  renderSearchSkeleton(6);
   document.getElementById('scrollLoader').style.display = 'none';
 }
 function showError(msg) {
@@ -576,6 +624,19 @@ function showWelcome() {
   stateEl.innerHTML = '<div class="empty"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e50914" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M4 11v8a2 2 0 002 2h12a2 2 0 002-2v-8H4z"/><path d="M4 11V7a2 2 0 012-2h12a2 2 0 012 2v4H4z"/><path d="M9 5l-2 6M15 5l-2 6"/></svg>Search for any movie, series, or anime to get started.<br/><span style="font-size:13px">Try "spider-man", "avatar", "naruto"...</span></div>';
   resultsEl.innerHTML = '';
   document.getElementById('scrollLoader').style.display = 'none';
+  loadTrendingHome();
+}
+
+async function loadTrendingHome() {
+  try {
+    const r = await fetch('/api/trending');
+    const j = await r.json();
+    const list = j.data?.items || j.data?.list || j.items || j.list || [];
+    if (list && list.length && !currentQuery) {
+      stateEl.innerHTML = `<div class="section-title" style="display:flex;align-items:center;gap:8px;">🔥 Trending & Recommended</div>`;
+      resultsEl.innerHTML = `<div class="grid" id="resultsGrid">${list.map(cardHTML).join('')}</div>`;
+    }
+  } catch(e) {}
 }
 
 function cardHTML(item) {
@@ -718,6 +779,16 @@ if (searchInput && suggestBox) {
     clearTimeout(suggestTimer);
     const q = searchInput.value.trim();
     if (!q) { suggestBox.style.display = 'none'; return; }
+    
+    // Show Suggestion Skeleton while typing
+    suggestBox.innerHTML = Array(4).fill(0).map(() => `
+      <div style="padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div class="skeleton" style="width:65%;height:14px;border-radius:4px;"></div>
+        <div class="skeleton" style="width:36px;height:12px;border-radius:4px;"></div>
+      </div>
+    `).join('');
+    suggestBox.style.display = 'block';
+
     suggestTimer = setTimeout(async () => {
       try {
         const r = await fetch(`/api/suggest?q=${encodeURIComponent(q)}`);
@@ -745,6 +816,9 @@ if (searchInput && suggestBox) {
   });
   window.addEventListener('scroll', () => { suggestBox.style.display = 'none'; }, { passive: true });
 }
+
+// Initial state on page load: show welcome or trending
+showWelcome();
 
 // Infinite Scroll logic
 window.addEventListener('scroll', () => {
