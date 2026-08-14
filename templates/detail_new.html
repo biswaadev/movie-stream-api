@@ -1546,15 +1546,17 @@ async function renderDownloadEpisodes() {
 
     const seNum = state.season + 1;
     const epNum = e.num || (i + 1);
+    const seParam = m.seasons[state.season]?.se ?? state.season;
     const label = m.isSeries ? ` - S${seNum}E${epNum}` : '';
     const fileTitle = (m.title + label + ` (${chosenQual})`).replace(/[\\/:*?"<>|]/g, '_');
 
     return {
       index: i,
+      se: seParam,
       epNum: epNum,
       epName: e.name || `Episode ${epNum}`,
       sizeMB: sizeMB,
-      url: rawUrl,
+      url: (i === state.ep) ? rawUrl : '',
       title: fileTitle,
       checked: true
     };
@@ -1617,33 +1619,110 @@ function updateDlSummary() {
   }
 }
 
-function downloadSingleFile(idx) {
-  const item = dlEpData[idx];
-  if (!item || !item.url) return;
-  const token = encodeStreamToken(item.url);
-  const a = document.createElement("a");
-  a.href = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  toast(`Downloading ${item.title}...`);
+const epResourceCache = {};
+
+async function getEpisodeDownloadUrl(se, epNum, chosenQual, chosenDub) {
+  const cacheKey = `${SUBJECT_ID}_${se}_${epNum}_${chosenDub || 'orig'}`;
+  let list = epResourceCache[cacheKey];
+  if (!list) {
+    try {
+      if (chosenDub) {
+        const dubData = await apiJSON(`/api/resources_dubs?subjectId=${SUBJECT_ID}&se=${se}&ep=${epNum}`);
+        const found = (dubData.dubs || []).find(d => String(d.subjectId) === String(chosenDub));
+        list = found?.list || [];
+      }
+      if (!list || !list.length) {
+        const resData = await apiJSON(`/api/resources?subjectId=${SUBJECT_ID}&se=${se}&ep=${epNum}`);
+        list = resData.data?.list || resData.list || [];
+      }
+      epResourceCache[cacheKey] = list;
+    } catch(e) {
+      list = [];
+    }
+  }
+
+  if (!list || !list.length) return "";
+  const qualNum = parseInt(chosenQual, 10) || 720;
+  const matched = list.find(r => (parseInt(r.resolution, 10) || 0) === qualNum) || list[0];
+  return rawUrlOf(matched);
 }
 
-function downloadSelectedBatch() {
+function triggerBrowserDownload(downloadUrl) {
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  iframe.src = downloadUrl;
+  document.body.appendChild(iframe);
+  setTimeout(() => iframe.remove(), 45000);
+}
+
+async function downloadSingleFile(idx) {
+  const item = dlEpData[idx];
+  if (!item) return;
+
+  const chosenQual = $("dlQualitySelect")?.value || "720p";
+  const chosenDub = $("dlDubSelect")?.value || "";
+
+  toast(`Fetching link for ${item.title}...`);
+  let rawUrl = item.url;
+  if (state.model.isSeries || !rawUrl) {
+    rawUrl = await getEpisodeDownloadUrl(item.se, item.epNum, chosenQual, chosenDub);
+  }
+
+  if (!rawUrl) {
+    toast("No download link found for this episode");
+    return;
+  }
+
+  const token = encodeStreamToken(rawUrl);
+  const dlUrl = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
+  triggerBrowserDownload(dlUrl);
+  toast(`✓ Downloading ${item.title}...`);
+}
+
+async function downloadSelectedBatch() {
   const selected = dlEpData.filter(x => x.checked);
   if (!selected.length) return;
 
+  const batchBtn = $("dlBatchBtn");
+  if (batchBtn) batchBtn.disabled = true;
+
+  const chosenQual = $("dlQualitySelect")?.value || "720p";
+  const chosenDub = $("dlDubSelect")?.value || "";
+
   toast(`Starting batch download of ${selected.length} files...`);
-  selected.forEach((item, i) => {
-    setTimeout(() => {
-      const token = encodeStreamToken(item.url);
-      const a = document.createElement("a");
-      a.href = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }, i * 600);
-  });
+
+  for (let i = 0; i < selected.length; i++) {
+    const item = selected[i];
+    if (batchBtn) {
+      batchBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Downloading ${i+1} of ${selected.length}...`;
+    }
+    toast(`Fetching link for ${item.title} (${i+1}/${selected.length})...`);
+
+    let rawUrl = item.url;
+    if (state.model.isSeries || !rawUrl) {
+      rawUrl = await getEpisodeDownloadUrl(item.se, item.epNum, chosenQual, chosenDub);
+    }
+
+    if (rawUrl) {
+      const token = encodeStreamToken(rawUrl);
+      const dlUrl = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
+      triggerBrowserDownload(dlUrl);
+      toast(`✓ Download started for ${item.title}`);
+    } else {
+      toast(`⚠ Failed to find link for ${item.title}`);
+    }
+
+    // Wait 1.2s between downloads so browser accepts all files independently
+    if (i < selected.length - 1) {
+      await new Promise(r => setTimeout(r, 1200));
+    }
+  }
+
+  if (batchBtn) {
+    batchBtn.disabled = false;
+    batchBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download Selected (${selected.length})</span>`;
+  }
+  toast(`✓ All ${selected.length} downloads initiated!`);
 }
 
 /* ---------- Header Auto-Suggest ---------- */
