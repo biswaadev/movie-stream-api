@@ -985,13 +985,8 @@ function applyStream(autoplay) {
   const modelDur = (parseInt(state.model?.durMinutes, 10) || 0) * 60;
   state.totalDur = rawDur || modelDur || 0;
 
-  // Instantly render timeline duration & data meter on page load
-  if ($("dur") && state.totalDur) $("dur").textContent = fmtTime(state.totalDur);
   const rawUrl = rawUrlOf(raw);
-  const hevc = isHevcRes(raw);
-  const target = hevc 
-    ? ("/stream_transcode?url=" + encodeURIComponent(rawUrl))
-    : ("/stream?url=" + encodeURIComponent(rawUrl));
+  const target = "/stream?url=" + encodeURIComponent(rawUrl);
   if (target === video.getAttribute("data-src")) { if (autoplay && state.playing) video.play().catch(() => {}); return; }
   video.setAttribute("data-src", target);
   video.src = target;
@@ -1269,16 +1264,8 @@ function checkResumeProgress() {
     $("resumeTime").textContent = fmtTime(time);
     bar.style.display = "flex";
     $("resumeBtn").onclick = () => {
-      const raw = currentRaw();
-      if (raw && isHevcRes(raw)) {
-        state.seekOffset = Math.floor(time);
-        const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw)) + "&ss=" + state.seekOffset;
-        video.setAttribute("data-src", target);
-        video.src = target;
-      } else {
-        state.seekOffset = 0;
-        video.currentTime = time;
-      }
+      state.seekOffset = 0;
+      video.currentTime = time;
       bar.style.display = "none";
       video.play().catch(() => {});
       toast("Resumed from " + fmtTime(time));
@@ -1336,18 +1323,9 @@ function seekAt(clientX) {
   video.removeAttribute("poster");
   $("bufferingSpinner").style.display = "flex";
 
-  const raw = currentRaw();
-  if (raw && isHevcRes(raw)) {
-    state.seekOffset = Math.floor(targetTime);
-    const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw)) + "&ss=" + state.seekOffset;
-    video.setAttribute("data-src", target);
-    video.src = target;
-    video.play().catch(() => {});
-  } else {
-    state.seekOffset = 0;
-    if (dur && !isNaN(targetTime)) {
-      video.currentTime = targetTime;
-    }
+  state.seekOffset = 0;
+  if (dur && !isNaN(targetTime)) {
+    video.currentTime = targetTime;
   }
 }
 progress.addEventListener("pointerdown", e => {

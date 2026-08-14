@@ -896,7 +896,7 @@ function pickRes(i) {
   if (!res) return;
   const url = res.resourceLink || res.url || res.link;
   const player = document.getElementById('player');
-  const endpoint = (res.codecName === 'hevc') ? '/stream_transcode' : '/stream';
+  const endpoint = '/stream';
   player.src = endpoint + '?url=' + encodeURIComponent(url);
   player.play().catch(() => {});
   document.querySelectorAll('.res-chip').forEach((c, idx) => c.classList.toggle('active', idx === i));
