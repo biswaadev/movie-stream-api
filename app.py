@@ -23,10 +23,26 @@ import movie_api as api
 import tracker
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "moviebox-admin-secret-key-2026")
+app.secret_key = os.environ.get("SECRET_KEY", "ofc-movies-secret-key-2026")
 
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "biswajittanti185@gmail.com")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "BISWA@9090")
+
+
+# ---------------------------------------------------------------------------
+# PWA Root Endpoints
+# ---------------------------------------------------------------------------
+@app.route("/manifest.json")
+def manifest():
+    return send_from_directory("static", "manifest.json", mimetype="application/manifest+json")
+
+
+@app.route("/sw.js")
+def service_worker():
+    response = send_from_directory("static", "sw.js", mimetype="application/javascript")
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 def admin_required(f):
@@ -597,54 +613,6 @@ def hls_segment():
         return resp
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-# ---------------------------------------------------------------------------
-# ServiceWorker — intercepts direct CDN video requests, injects User-Agent
-# This bypasses the Flask proxy entirely for instant low-latency playback
-# ---------------------------------------------------------------------------
-@app.route("/sw.js")
-def service_worker():
-    js = f"""
-const ANDROID_UA = {json.dumps(api.ANDROID_USER_AGENT)};
-
-self.addEventListener('install', event => self.skipWaiting());
-self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
-
-// Intercept ALL requests to hakunaymatata.com and aoneroom CDN
-// This lets us inject the required Android User-Agent header
-// so video streams directly from CDN to user with zero server hop
-self.addEventListener('fetch', event => {{
-    const urlStr = event.request.url;
-    const isCdn = urlStr.includes('hakunaymatata.com') || urlStr.includes('aoneroom');
-
-    if (isCdn) {{
-        event.respondWith((async () => {{
-            try {{
-                const reqHeaders = new Headers();
-                // Forward Range header for seek/partial content support
-                const rangeHeader = event.request.headers.get('Range');
-                if (rangeHeader) reqHeaders.set('Range', rangeHeader);
-                reqHeaders.set('User-Agent', ANDROID_UA);
-                reqHeaders.set('Referer', 'https://www.moviebox.ng/');
-                reqHeaders.set('Origin', 'https://www.moviebox.ng');
-
-                const cdnResp = await fetch(urlStr, {{
-                    method: event.request.method,
-                    headers: reqHeaders,
-                    mode: 'cors',
-                    credentials: 'omit'
-                }});
-                if (cdnResp.ok || cdnResp.status === 206) return cdnResp;
-            }} catch (e) {{
-                // SW fetch failed - fallback to server proxy
-            }}
-            return fetch(event.request);
-        }})());
-    }}
-}});
-"""
-    return Response(js, content_type="application/javascript", headers={"Service-Worker-Allowed": "/"})
 
 
 # ---------------------------------------------------------------------------
