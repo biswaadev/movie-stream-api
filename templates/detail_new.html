@@ -1625,19 +1625,6 @@ async function selectEpisode(i) {
 }
 
 /* ---------- Data loading ---------- */
-async function loadTrending() {
-  try {
-    const j = await apiJSON("/api/trending");
-    const d = j.data || j;
-    const list = d.items || d.list || d.subjects || d.verticalRanks || [];
-    return list.slice(0, 12).map(x => ({
-      id: x.subjectId || x.id,
-      title: x.title || x.subjectName || 'Untitled',
-      year: x.releaseDate ? x.releaseDate.substring(0, 4) : (x.year || x.releaseYear || ''),
-      img: imageUrlOf(x.cover || x.imageList || x.images) || pic(x.subjectId || Math.random(), 320, 480),
-    })).filter(x => x.id);
-  } catch { return []; }
-}
 
 function renderInitialSkeletons() {
   const mTitle = $("mTitle");
@@ -1677,16 +1664,14 @@ function renderInitialSkeletons() {
 
 async function initApi() {
   renderInitialSkeletons();
-  const [detail, seasons, trending] = await Promise.all([
+  const [detail, seasons] = await Promise.all([
     apiJSON(`/api/detail/${SUBJECT_ID}`),
     apiJSON(`/api/seasons/${SUBJECT_ID}`).catch(() => ({})),
-    loadTrending(),
   ]);
   const d = detail.data || detail;
   const seasonList = (seasons?.data?.seasons || seasons?.data || []).filter(x => (x.maxEp ?? 1) > 0);
   const isSeries = [2, 5].includes(d.subjectType) || seasonList.length > 0;
   state.model = buildModel(d, seasonList, isSeries);
-  state.model.recs = trending;
   state.model._globalIdx = i => {
     let base = 0;
     for (let s = 0; s < state.season; s++) base += state.model.seasons[s].eps.length;
@@ -1696,7 +1681,6 @@ async function initApi() {
   renderSeasons();
   renderEpisodes();
   renderCast();
-  renderRecs();
   document.title = `${state.model.title} — Watch`;
   await selectEpisode(0);
 }
