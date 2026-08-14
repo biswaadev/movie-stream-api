@@ -1168,36 +1168,31 @@ function launchExternalPlayer(type) {
 
   // Mobile (Android / iOS)
   if (isAndroid) {
-    if (type === 'mx') {
-      const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.ad;end`;
-      const startTime = Date.now();
-      window.location.href = intentUrl;
+    const isHttps = streamUrl.startsWith('https');
+    const noProto = streamUrl.replace(/^https?:\/\//, '');
+    const scheme = isHttps ? 'https' : 'http';
+
+    if (type === 'vlc') {
+      // 1. Direct VLC Scheme (Supported in Android VLC)
+      window.location.href = `vlc://${streamUrl}`;
+      // 2. Android Intent with package & proper scheme fallback
       setTimeout(() => {
-        if (Date.now() - startTime < 2000) {
-          if (confirm("MX Player aapke phone me install nahi hai! Kya aap Play Store se install karna chahte hain, ya doosre video player me play karein?")) {
-            window.location.href = "https://play.google.com/store/apps/details?id=com.mxtech.videoplayer.ad";
-          } else {
-            window.location.href = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
-          }
-        }
-      }, 1200);
-    } else if (type === 'vlc') {
-      const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end`;
-      const startTime = Date.now();
-      window.location.href = intentUrl;
+        window.location.href = `intent://${noProto}#Intent;scheme=${scheme};type=video/*;package=org.videolan.vlc;action=android.intent.action.VIEW;end`;
+      }, 250);
+    } else if (type === 'mx') {
+      // 1. Direct MX Player Intent
+      window.location.href = `intent://${noProto}#Intent;scheme=${scheme};type=video/*;package=com.mxtech.videoplayer.ad;action=android.intent.action.VIEW;end`;
+      // 2. MX Player Pro Intent fallback
       setTimeout(() => {
-        if (Date.now() - startTime < 2000) {
-          if (confirm("VLC Player aapke phone me install nahi hai! Kya aap Play Store se install karna chahte hain, ya doosre video player me play karein?")) {
-            window.location.href = "https://play.google.com/store/apps/details?id=org.videolan.vlc";
-          } else {
-            window.location.href = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
-          }
-        }
-      }, 1200);
+        window.location.href = `intent://${noProto}#Intent;scheme=${scheme};type=video/*;package=com.mxtech.videoplayer.pro;action=android.intent.action.VIEW;end`;
+      }, 300);
     } else {
-      // Universal Android Video Player Chooser
-      const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
-      window.location.href = intentUrl;
+      // Universal Android Video Player Chooser Intent
+      window.location.href = `intent://${noProto}#Intent;scheme=${scheme};type=video/*;action=android.intent.action.VIEW;end`;
+      // VLC Fallback
+      setTimeout(() => {
+        window.location.href = `vlc://${streamUrl}`;
+      }, 350);
     }
   } else if (isIOS) {
     window.location.href = `vlc://${streamUrl}`;
