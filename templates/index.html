@@ -513,6 +513,11 @@ function renderContinueWatching() {
   const cwGrid = document.getElementById('continueWatchingGrid');
   if (!cwSection || !cwGrid) return;
 
+  if (currentQuery && currentQuery.trim().length > 0) {
+    cwSection.style.display = 'none';
+    return;
+  }
+
   let history = [];
   try {
     history = JSON.parse(localStorage.getItem('fmb_watch_history')) || [];
@@ -582,6 +587,9 @@ function optimizeImgUrl(url, w = 160, q = 60) {
 }
 
 function renderSearchSkeleton(count = 6) {
+  const cwSection = document.getElementById('continueWatchingSection');
+  if (cwSection) cwSection.style.display = 'none';
+
   stateEl.innerHTML = `<div class="skeleton" style="width: 220px; height: 26px; margin-bottom: 18px; border-radius: 6px;"></div>`;
   resultsEl.innerHTML = `<div class="grid">` + Array(count).fill(0).map(() => `
     <div class="skeleton-card">
@@ -621,9 +629,11 @@ function showError(msg) {
   document.getElementById('scrollLoader').style.display = 'none';
 }
 function showWelcome() {
+  currentQuery = '';
   stateEl.innerHTML = '<div class="empty"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e50914" stroke-width="2" style="vertical-align:middle;margin-right:6px"><path d="M4 11v8a2 2 0 002 2h12a2 2 0 002-2v-8H4z"/><path d="M4 11V7a2 2 0 012-2h12a2 2 0 012 2v4H4z"/><path d="M9 5l-2 6M15 5l-2 6"/></svg>Search for any movie, series, or anime to get started.<br/><span style="font-size:13px">Try "spider-man", "avatar", "naruto"...</span></div>';
   resultsEl.innerHTML = '';
   document.getElementById('scrollLoader').style.display = 'none';
+  renderContinueWatching();
 }
 
 function cardHTML(item) {
