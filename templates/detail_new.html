@@ -56,128 +56,85 @@
     content: ""; position: absolute; inset: 0;
     background: linear-gradient(180deg, rgba(15,15,15,0.35) 0%, rgba(15,15,15,0.7) 60%, var(--bg) 100%);
   }
-  .hero-inner { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; }
+  .hero-inner { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 10px 0; }
 
-  /* ---------- Player ---------- */
-  .player {
-    position: relative; width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #000;
-    border-radius: var(--radius);
+  /* ---------- Poster & Hero Showcase ---------- */
+  .hero-card-layout {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+    padding: 10px 8px 20px;
+  }
+  .hero-poster-box {
+    position: relative;
+    width: 220px;
+    min-width: 220px;
+    height: 330px;
+    border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 24px 60px rgba(0,0,0,0.65);
-    border: 1px solid var(--border);
-  }
-  .player video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
-  .ep-label {
-    position: absolute; top: 14px; left: 14px; z-index: 5;
-    background: rgba(0,0,0,0.6); color: #fff;
-    font-size: 12px; font-weight: 700;
-    padding: 6px 12px; border-radius: 8px;
+    cursor: pointer;
+    background: var(--surface2);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.7);
     border: 1px solid rgba(255,255,255,0.12);
-    max-width: 70%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: transform .2s, box-shadow .2s;
   }
-  .big-play {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    width: 78px; height: 78px; border-radius: 50%;
-    background: rgba(229,9,20,0.92); border: none; color: #fff;
-    font-size: 28px; cursor: pointer; z-index: 5;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 8px 30px rgba(229,9,20,0.45);
-    transition: transform .15s, opacity .2s;
+  .hero-poster-box:hover {
+    transform: scale(1.03);
+    box-shadow: 0 20px 50px rgba(229,9,20,0.3);
   }
-  .big-play:hover { transform: translate(-50%,-50%) scale(1.08); }
-  .big-play.hidden { opacity: 0; pointer-events: none; }
-
-  .controls {
-    position: absolute; left: 0; right: 0; bottom: 0; z-index: 25;
-    background: linear-gradient(0deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.35) 55%, transparent 100%);
-    padding: 22px 16px 10px;
-    transition: opacity .25s;
+  .hero-play-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: background .2s;
   }
-  .player.idle .controls { opacity: 0; pointer-events: none; }
-
-  .progress { position: relative; height: 14px; cursor: pointer; display: flex; align-items: center; }
-  .progress-track {
-    width: 100%; height: 4px; background: rgba(255,255,255,0.25);
-    border-radius: 4px; transition: height .12s;
+  .hero-poster-box:hover .hero-play-overlay {
+    background: rgba(0,0,0,0.2);
   }
-  .progress:hover .progress-track { height: 7px; }
-  .progress-fill {
-    height: 100%; width: 0%; background: var(--accent);
-    border-radius: 4px; position: relative;
+  .hero-play-circle {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: rgba(229,9,20,0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 20px rgba(229,9,20,0.5);
+    transition: transform .2s;
   }
-  .progress-fill::after {
-    content: ""; position: absolute; right: -6px; top: 50%;
-    transform: translateY(-50%);
-    width: 12px; height: 12px; border-radius: 50%;
-    background: var(--accent); opacity: 0; transition: opacity .12s;
+  .hero-poster-box:hover .hero-play-circle {
+    transform: scale(1.12);
   }
-  .progress:hover .progress-fill::after { opacity: 1; }
-
-  .controls-row {
-    display: flex; align-items: center; gap: 10px; margin-top: 6px;
-  }
-  .ctrl-btn {
-    background: none; border: none; color: #fff; cursor: pointer;
-    width: 34px; height: 34px; border-radius: 8px;
-    display: inline-flex; align-items: center; justify-content: center;
-    transition: background .12s;
-  }
-  .ctrl-btn:hover { background: rgba(255,255,255,0.12); }
-  .time { font-size: 12px; color: #fff; font-variant-numeric: tabular-nums; margin-left: 2px; white-space: nowrap; }
-
-  .spacer { flex: 1; }
-
-  .control-group { position: relative; }
-  .menu {
-    position: absolute; bottom: calc(100% + 10px); right: 0;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    min-width: 170px;
-    padding: 6px;
-    box-shadow: 0 16px 40px rgba(0,0,0,0.6);
-    display: none; z-index: 30;
-  }
-  .menu.open { display: block; }
-  .menu-item {
-    display: flex; align-items: center; gap: 8px;
-    width: 100%; background: none; border: none; color: var(--text);
-    font-size: 13px; font-weight: 500;
-    padding: 8px 12px; border-radius: 8px; cursor: pointer; text-align: left;
-  }
-  .menu-item:hover { background: var(--surface2); }
-  .menu-item.active { color: var(--accent); }
-  .menu-item .check { width: 16px; text-align: center; }
-
-  .vol-slider {
-    -webkit-appearance: none; appearance: none;
-    width: 90px; height: 4px; border-radius: 4px;
-    background: rgba(255,255,255,0.25); outline: none;
-  }
-  .vol-slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 12px; height: 12px; border-radius: 50%;
-    background: #fff; cursor: pointer;
-  }
-  .vol-slider::-moz-range-thumb {
-    width: 12px; height: 12px; border-radius: 50%;
-    background: #fff; cursor: pointer; border: none;
+  .hero-info-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
 
-  .btn-text {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--surface); border: 1px solid var(--border);
-    color: #fff; border-radius: 8px;
-    padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
-    transition: border-color .12s;
+  @media (max-width: 760px) {
+    .hero-card-layout {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 20px;
+    }
+    .hero-poster-box {
+      width: 170px;
+      min-width: 170px;
+      height: 255px;
+    }
+    .meta-row, .genres, .meta-actions {
+      justify-content: center;
+    }
   }
-  .btn-text:hover { border-color: var(--accent); }
-  .btn-text:disabled { opacity: 0.45; cursor: default; }
 
   /* ---------- Meta panel ---------- */
-  .meta-panel { position: relative; z-index: 1; max-width: 1120px; margin: 26px auto 0; padding: 0 8px; }
+  .meta-panel { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; }
   .meta-panel h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 800; letter-spacing: -0.5px; }
   .meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 14px; }
   .rating { color: #ffc107; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 5px; }
@@ -406,92 +363,49 @@
 <section class="hero">
   <div class="hero-bg" id="heroBg"></div>
   <div class="hero-inner">
+    <div class="hero-card-layout">
+      <!-- Poster Card with Play Button Hover -->
+      <div class="hero-poster-box" onclick="openPlayModal()" id="heroPosterBox">
+        <img id="heroPosterImg" src="" alt="Poster" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:14px;" />
+        <div id="heroPosterSkeleton" class="skeleton" style="width:100%;height:100%;border-radius:14px;"></div>
+        <div class="hero-play-overlay">
+          <div class="hero-play-circle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff" style="margin-left:3px;"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+          <span style="font-size:12px;font-weight:700;color:#fff;margin-top:8px;text-shadow:0 2px 8px rgba(0,0,0,0.8);">Stream in App</span>
+        </div>
+      </div>
 
-    <div class="player" id="player">
-      <div class="ep-label" id="epLabel">Loading…</div>
-      <div id="dataUsageBadge" style="position:absolute;top:14px;right:14px;z-index:15;background:rgba(0,0,0,0.8);border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:5px 11px;color:#eee;font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;backdrop-filter:blur(4px);pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,0.4);">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1e90ff" stroke-width="2.5" style="vertical-align:middle"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        <span>Data: <span id="dataUsedText" style="color:#1e90ff;font-weight:700">0.0 MB</span> / <span id="dataTotalText" style="color:var(--muted)">— MB</span></span>
-        <span style="color:rgba(255,255,255,0.3);margin:0 1px;">|</span>
-        <span style="color:#7bd88f;font-weight:700;display:inline-flex;align-items:center;gap:3px;"><span style="color:#7bd88f;">⚡</span><span id="dataSpeedText">0 KB/s</span></span>
-      </div>
-      <div id="resumeBar" style="display:none;position:absolute;top:48px;left:14px;z-index:15;background:rgba(0,0,0,0.85);border:1px solid var(--accent);color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:8px;align-items:center;gap:10px;">
-        <span>Resume from <span id="resumeTime">0:00</span>?</span>
-        <button id="resumeBtn" style="background:var(--accent);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-weight:700;cursor:pointer;">Resume</button>
-        <button onclick="document.getElementById('resumeBar').style.display='none'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;">×</button>
-      </div>
-      <div id="nextOverlay" style="display:none;position:absolute;inset:0;z-index:18;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#fff;">
-        <h3 id="nextTitle" style="font-size:18px;font-weight:700;">Up Next: Episode 2</h3>
-        <p style="font-size:13px;color:var(--muted)">Autoplay in <span id="nextTimer" style="color:var(--accent);font-weight:800">5</span>s</p>
-        <div style="display:flex;gap:10px;">
-          <button id="nextPlayNowBtn" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 20px;font-weight:700;cursor:pointer;">▶ Play Now</button>
-          <button id="nextCancelBtn" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;">Cancel</button>
+      <!-- Main Metadata Info Column -->
+      <div class="hero-info-col">
+        <h1 id="mTitle" style="font-size:clamp(24px, 4vw, 36px);font-weight:800;letter-spacing:-0.5px;color:#fff;margin-bottom:4px;">Loading…</h1>
+        
+        <div class="meta-row" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:10px 0;">
+          <span class="rating" id="ratingWrap" hidden><svg width="14" height="14" viewBox="0 0 24 24" fill="#f5c518" style="vertical-align:middle;margin-right:3px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><span id="mRating"></span></span>
+          <span class="chip" id="mYear"></span>
+          <span class="chip" id="mDur"></span>
+          <span class="chip" id="mLang"></span>
+          <span class="chip" id="mQual">1080p HD</span>
         </div>
-      </div>
-      <div id="bufferingSpinner" style="display:none;position:absolute;inset:0;z-index:15;background:rgba(0,0,0,0.85);flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
-        <div style="width:56px;height:56px;border:4px solid rgba(255,255,255,0.18);border-top:4px solid var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;box-shadow:0 0 18px rgba(229,9,20,0.7);"></div>
-        <span style="color:#fff;font-size:12px;font-weight:700;margin-top:12px;letter-spacing:0.6px;text-shadow:0 2px 6px rgba(0,0,0,0.8)">Buffering...</span>
-      </div>
-      <video id="video" preload="auto" playsinline></video>
-      <button class="big-play" id="bigPlay" aria-label="Play">▶</button>
-      <div class="controls">
-        <div class="progress" id="progress">
-          <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-        </div>
-        <div class="controls-row">
-          <button class="ctrl-btn" id="playBtn" aria-label="Play/Pause">
-            <svg id="iconPause" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
-            <svg id="iconPlay" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M8 5v14l11-7z"/></svg>
+
+        <div class="genres" id="genres" style="margin-bottom:14px;"></div>
+
+        <p class="synopsis" id="synText" style="margin-bottom:20px;line-height:1.6;font-size:14px;color:var(--muted);max-width:820px;"></p>
+
+        <div class="meta-actions" style="display:flex;flex-wrap:wrap;gap:12px;">
+          <button class="act-btn play-app" id="playAppBtn" onclick="openPlayModal()" style="background:linear-gradient(135deg, #e50914 0%, #b80610 100%);color:#fff;border:none;font-weight:700;font-size:15px;padding:12px 26px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(229,9,20,0.45);transition:transform .12s;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <span>▶ Play in App (VLC / MX Player)</span>
           </button>
-          <span class="time" id="timeLabel">0:00 / 0:00</span>
-          <div class="spacer"></div>
-          <button class="ctrl-btn" id="volBtn" aria-label="Volume">
-            <svg id="iconVol" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>
-            <svg id="iconMute" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M3 9v6h4l5 5V4L7 9H3zm18.6 3l-2.3-2.3-1.4 1.4 2.3 2.3-2.3 2.3 1.4 1.4 2.3-2.3 2.3 2.3 1.4-1.4-2.3-2.3 2.3-2.3-1.4-1.4z"/></svg>
+          <button class="act-btn download" id="dlBtn" onclick="openDownloadModal()" style="background:var(--surface2);color:#fff;border:1px solid rgba(255,255,255,0.12);font-weight:700;font-size:14px;padding:12px 22px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Download Center</span>
           </button>
-          <div class="control-group">
-            <button class="btn-text" id="speedBtn">Speed <span id="speedLabel">1x</span> ▾</button>
-            <div class="menu" id="speedMenu"></div>
-          </div>
-          <div class="control-group">
-            <button class="btn-text" id="qualityBtn">Quality <span id="qualityLabel">—</span> ▾</button>
-            <div class="menu" id="qualityMenu"></div>
-          </div>
-          <div class="control-group" id="langGroup" style="display:none">
-            <button class="btn-text" id="langBtn">Language <span id="langLabel">—</span> ▾</button>
-            <div class="menu" id="langMenu"></div>
-          </div>
-          <div class="control-group" id="subGroup" style="display:none">
-            <button class="btn-text" id="subBtn">CC <span id="subLabel">Off</span> ▾</button>
-            <div class="menu" id="subMenu"></div>
-          </div>
-          <button class="ctrl-btn" id="fsBtn" aria-label="Fullscreen">
-            <svg id="iconFsIn" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-          </button>
+          <button class="act-btn watchlist" id="wlBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span id="wlText">Watchlist</span></button>
+          <button class="act-btn share" id="shareBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>Share</button>
         </div>
       </div>
     </div>
-
-    <div class="error-banner" id="errBanner" hidden></div>
-
-    <div class="meta-panel">
-      <h1 id="mTitle">Loading…</h1>
-      <div class="meta-row">
-        <span class="rating" id="ratingWrap" hidden><svg width="14" height="14" viewBox="0 0 24 24" fill="#f5c518" style="vertical-align:middle;margin-right:3px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><span id="mRating"></span></span>
-        <span class="chip" id="mYear"></span>
-        <span class="chip" id="mDur"></span>
-        <span class="chip" id="mLang"></span>
-        <span class="chip" id="mQual">HD</span>
-      </div>
-      <div class="genres" id="genres"></div>
-      <div class="meta-actions">
-        <button class="act-btn play-app" id="playAppBtn" style="background:#e50914;color:#fff;border-color:#e50914;font-weight:700;box-shadow:0 4px 16px rgba(229,9,20,0.4);"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:5px"><path d="M8 5v14l11-7z"/></svg><span id="playAppText">▶ Play in App</span></button>
-        <button class="act-btn download" id="dlBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span id="dlText">Download</span></button>
-        <button class="act-btn watchlist" id="wlBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span id="wlText">Watchlist</span></button>
-        <button class="act-btn share" id="shareBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>Share</button>
-      </div>
-    </div>
-
   </div>
 </section>
 
@@ -574,14 +488,14 @@
         </button>
       </div>
 
-      <!-- Quick Download & Web Player Row -->
+      <!-- Quick Download Row -->
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);">
         <button onclick="downloadCurrentStream()" style="background:none;border:none;color:#1e90ff;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Direct Download (<span id="playFileSizeLabel">—</span>)
         </button>
-        <button onclick="playInWebPlayer()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;">
-          🌐 Play in Browser Instead
+        <button onclick="copyCurrentStreamLink()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;">
+          📋 Copy Network URL
         </button>
       </div>
 
@@ -691,8 +605,6 @@ const state = {
 };
 
 const $ = id => document.getElementById(id);
-const video = $("video");
-const player = $("player");
 
 let toastTimer = null;
 function toast(msg) {
@@ -827,6 +739,11 @@ function renderMeta() {
   const m = state.model;
   if (!m) return;
   if ($("heroBg")) $("heroBg").style.backgroundImage = `url('${m.cover}')`;
+  if ($("heroPosterImg")) {
+    $("heroPosterImg").src = m.cover || '';
+    $("heroPosterImg").style.display = "block";
+    if ($("heroPosterSkeleton")) $("heroPosterSkeleton").style.display = "none";
+  }
   if ($("mTitle")) $("mTitle").textContent = m.title || '';
   if ($("mYear")) $("mYear").textContent = m.year || '';
   if ($("mDur")) $("mDur").textContent = m.dur || '';
@@ -1053,165 +970,6 @@ function setQuality(i) {
   toast("Quality: " + label);
 }
 
-function getDur() {
-  return (state.totalDur && state.totalDur > 0) ? state.totalDur : (video.duration || 0);
-}
-
-function applyStream(autoplay) {
-  const raw = currentRaw();
-  if (!raw) { toast("No stream available"); return; }
-  const wasPlaying = state.playing && autoplay;
-  const t = video.currentTime;
-
-  state.seekOffset = 0;
-  const rawDur = parseInt(raw.duration, 10);
-  const modelDur = (parseInt(state.model?.durMinutes, 10) || 0) * 60;
-  state.totalDur = rawDur || modelDur || 0;
-
-  const rawUrl = rawUrlOf(raw);
-  const hevc = isHevcRes(raw);
-  const target = hevc
-    ? ("/stream_transcode?url=" + encodeURIComponent(rawUrl))
-    : ("/stream?url=" + encodeURIComponent(rawUrl));
-  if (target === video.getAttribute("data-src")) { if (autoplay && state.playing) video.play().catch(() => {}); return; }
-  video.setAttribute("data-src", target);
-  video.src = target;
-  video.load(); // Force immediate background pre-buffering
-  checkResumeProgress();
-  if (autoplay) {
-    state.playing = true;
-    updatePlayUI();
-    const p = video.play();
-    if (p !== undefined) {
-      p.catch(() => {
-        // Fallback for mobile browsers that require muted autoplay
-        video.muted = true;
-        syncVol();
-        video.play().catch(() => {});
-      });
-    }
-  } else if (wasPlaying) {
-    video.addEventListener("loadedmetadata", () => { video.currentTime = t; video.play().catch(() => {}); }, { once: true });
-  }
-}
-
-/* ---------- Subtitles & Captions ---------- */
-state.subtitles = [];
-state.curSub = -1;
-
-function fetchSubtitles(se, ep) {
-  if (!SUBJECT_ID) return;
-  fetch(`/api/subtitles?subjectId=${SUBJECT_ID}&se=${se}&ep=${ep}`)
-    .then(r => r.json())
-    .then(d => {
-      state.subtitles = d.subtitles || [];
-      renderSubMenu();
-    }).catch(() => {});
-}
-
-function renderSubMenu() {
-  const group = $("subGroup");
-  const menu = $("subMenu");
-  const label = $("subLabel");
-  if (!state.subtitles || !state.subtitles.length) {
-    if (group) group.style.display = "none";
-    return;
-  }
-  if (group) group.style.display = "inline-block";
-  if (label) label.textContent = state.curSub >= 0 ? state.subtitles[state.curSub].language : "Off";
-  menu.innerHTML =
-    `<button class="menu-item ${state.curSub === -1 ? "active" : ""}" onclick="setSub(-1)">
-      <span class="check">${state.curSub === -1 ? "✓" : "&nbsp;&nbsp;"}</span>Off
-    </button>` +
-    state.subtitles.map((s, i) =>
-      `<button class="menu-item ${state.curSub === i ? "active" : ""}" onclick="setSub(${i})">
-        <span class="check">${state.curSub === i ? "✓" : "&nbsp;&nbsp;"}</span>💬 ${esc(s.language)}
-      </button>`
-    ).join("");
-}
-
-function setSub(i) {
-  state.curSub = i;
-  renderSubMenu();
-  closeMenus();
-  toast("Subtitles: " + (i >= 0 ? state.subtitles[i].language : "Off"));
-}
-
-/* ---------- Player controls & Events ---------- */
-function togglePlay() {
-  if (video.paused) video.play().catch(() => {});
-  else video.pause();
-}
-
-function updatePlayUI() {
-  $("iconPlay").style.display = state.playing ? "none" : "block";
-  $("iconPause").style.display = state.playing ? "block" : "none";
-  $("bigPlay").classList.toggle("hidden", state.playing);
-}
-
-function openMenu(id) {
-  document.querySelectorAll(".menu").forEach(m => m.classList.remove("open"));
-  $(id).classList.toggle("open");
-}
-function closeMenus() {
-  document.querySelectorAll(".menu").forEach(m => m.classList.remove("open"));
-}
-
-$("bigPlay").addEventListener("click", togglePlay);
-$("playBtn").addEventListener("click", togglePlay);
-$("speedBtn").addEventListener("click", e => { e.stopPropagation(); openMenu("speedMenu"); });
-$("qualityBtn").addEventListener("click", e => { e.stopPropagation(); openMenu("qualityMenu"); });
-$("langBtn").addEventListener("click", e => { e.stopPropagation(); openMenu("langMenu"); });
-$("subBtn").addEventListener("click", e => { e.stopPropagation(); openMenu("subMenu"); });
-document.addEventListener("click", closeMenus);
-document.addEventListener("keydown", e => { if (e.code === "Space" && e.target.tagName !== "INPUT") { e.preventDefault(); togglePlay(); } });
-
-video.addEventListener("play", () => {
-  state.playing = true;
-  updatePlayUI();
-  saveToWatchHistory((state.seekOffset || 0) + video.currentTime, getDur());
-});
-video.addEventListener("pause", () => { state.playing = false; updatePlayUI(); });
-video.addEventListener("loadstart", () => { $("bufferingSpinner").style.display = "flex"; });
-video.addEventListener("seeking", () => { $("bufferingSpinner").style.display = "flex"; });
-video.addEventListener("waiting", () => { $("bufferingSpinner").style.display = "flex"; });
-video.addEventListener("stalled", () => { $("bufferingSpinner").style.display = "flex"; });
-video.addEventListener("seeked", () => { $("bufferingSpinner").style.display = "none"; });
-video.addEventListener("playing", () => { $("bufferingSpinner").style.display = "none"; });
-video.addEventListener("canplay", () => { $("bufferingSpinner").style.display = "none"; });
-video.addEventListener("progress", updateDataMeter);
-video.addEventListener("error", () => {
-  $("bufferingSpinner") && ($("bufferingSpinner").style.display = "none");
-  const raw = currentRaw();
-
-  // If HEVC failed on user's browser, auto-fallback to H.264 if available
-  if (raw && isHevcRes(raw) && state.options && state.options.length > 1) {
-    const h264Idx = state.options.findIndex(o => !o.hevc);
-    if (h264Idx !== -1 && h264Idx !== state.curIndex) {
-      state.curIndex = h264Idx;
-      renderMenus();
-      toast("HEVC not supported by your browser; switching to " + (state.options[h264Idx].label || "H.264") + "...");
-      applyStream(true);
-      return;
-    }
-  }
-
-  // Try next available quality stream
-  if (state.options && state.options.length > 1 && !state._streamRetried) {
-    state._streamRetried = true;
-    const nextIdx = (state.curIndex + 1) % state.options.length;
-    if (nextIdx !== state.curIndex) {
-      state.curIndex = nextIdx;
-      renderMenus();
-      toast("Retrying with " + (state.options[nextIdx].label || "alternative stream") + "...");
-      applyStream(true);
-      return;
-    }
-  }
-
-  setError("Video failed to load or link expired. Try selecting a different quality option.");
-});
-
 function saveToWatchHistory(curTime, dur) {
   if (!SUBJECT_ID || !state.model) return;
   const key = 'fmb_watch_history';
@@ -1228,7 +986,7 @@ function saveToWatchHistory(curTime, dur) {
     img: state.model.cover || '',
     season: state.season,
     ep: state.ep,
-    currentTime: Math.floor(curTime),
+    currentTime: Math.floor(curTime || 0),
     duration: Math.floor(dur || 0),
     timestamp: Date.now()
   };
@@ -1240,283 +998,8 @@ function saveToWatchHistory(curTime, dur) {
   localStorage.setItem(key, JSON.stringify(history));
 }
 
-let lastMeterTime = performance.now();
-let lastMeterMB = 0;
-let currentSpeedStr = "0 KB/s";
-
-function updateDataMeter() {
-  const usedEl = $("dataUsedText");
-  const totalEl = $("dataTotalText");
-  const speedEl = $("dataSpeedText");
-  if (!usedEl || !totalEl) return;
-
-  const raw = currentRaw();
-  const dur = getDur();
-
-  // Calculate actual downloaded buffered time across all buffer ranges (RAM/Cache download)
-  let bufferedSec = 0;
-  if (video.buffered && video.buffered.length > 0) {
-    for (let i = 0; i < video.buffered.length; i++) {
-      bufferedSec += (video.buffered.end(i) - video.buffered.start(i));
-    }
-  }
-  const curTime = (state.seekOffset || 0) + video.currentTime;
-  if (bufferedSec < curTime) {
-    bufferedSec = curTime;
-  }
-
-  let totalBytes = raw?.size || raw?.contentLength || raw?.fileSize || raw?.sizeByte || 0;
-  let totalMB = totalBytes ? totalBytes / (1024 * 1024) : 0;
-
-  if (!totalMB && dur) {
-    const q = state.options[state.curIndex]?.label || "720p";
-    const bitrate = q.includes("1080p") ? 650 : q.includes("720p") ? 350 : q.includes("480p") ? 180 : 110;
-    totalMB = (dur / 3600) * bitrate;
-  }
-
-  if (!totalMB) {
-    usedEl.textContent = "0.0 MB";
-    totalEl.textContent = "— MB";
-    if (speedEl) speedEl.textContent = "0 kbps";
-    return;
-  }
-
-  // 1.25 multiplier accounts for TCP/IP/TLS protocol overhead, background device traffic, and page load
-  const downloadedRatio = dur > 0 ? Math.min(1.0, bufferedSec / dur) : 0;
-  const usedMB = Math.min(totalMB * 1.25, downloadedRatio * totalMB * 1.25);
-
-  // Realtime Speedometer Calculation (Matching Phone Hotspot & Mobile Data Counter in kbps / Mbps)
-  const now = performance.now();
-  const timeDiffSec = (now - lastMeterTime) / 1000;
-
-  if (timeDiffSec >= 0.4) {
-    const mbDiff = usedMB - lastMeterMB;
-    if (mbDiff > 0 && timeDiffSec > 0) {
-      const speedMBps = mbDiff / timeDiffSec;
-      const speedKbps = Math.round(speedMBps * 1024 * 8); // Convert to kilobits/sec (matches Phone Hotspot)
-      if (speedKbps >= 1000) {
-        currentSpeedStr = (speedKbps / 1000).toFixed(1) + " Mbps";
-      } else {
-        currentSpeedStr = (speedKbps > 0 ? speedKbps : 0) + " kbps";
-      }
-    } else {
-      currentSpeedStr = "0 kbps";
-    }
-    lastMeterTime = now;
-    lastMeterMB = usedMB;
-  }
-
-  const fmtMB = mb => mb >= 1000 ? (mb / 1024).toFixed(2) + " GB" : mb.toFixed(1) + " MB";
-  const fmtTotal = mb => mb >= 1000 ? (mb / 1024).toFixed(2) + " GB" : Math.round(mb) + " MB";
-
-  usedEl.textContent = fmtMB(usedMB);
-  totalEl.textContent = fmtTotal(totalMB);
-  if (speedEl) speedEl.textContent = currentSpeedStr;
-}
-
-let lastSaveTime = 0;
-let watchLogged = false;
-video.addEventListener("timeupdate", () => {
-  if (state.drag) return;
-  const curTime = (state.seekOffset || 0) + video.currentTime;
-  const dur = getDur();
-  const pct = dur ? (curTime / dur) * 100 : 0;
-  $("progressFill").style.width = Math.min(100, pct) + "%";
-  $("timeLabel").textContent = `${fmtTime(curTime)} / ${fmtTime(dur)}`;
-  updateDataMeter();
-
-  // Log WATCH event in admin panel when user actively watches 5+ seconds
-  if (!watchLogged && video.currentTime >= 5 && !video.paused) {
-    watchLogged = true;
-    const raw = currentRaw();
-    try {
-      fetch('/api/track', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          action: 'WATCH_START',
-          subject_id: SUBJECT_ID,
-          title: state.model?.title || '',
-          season: (state.season || 0) + 1,
-          episode: (state.ep || 0) + 1,
-          quality: raw ? (raw.resolution ? (raw.resolution + 'p') : (raw.quality || '')) : '',
-          details: 'active_playback'
-        })
-      }).catch(() => {});
-    } catch(e) {}
-  }
-
-  // Save progress every 5 seconds
-  if (SUBJECT_ID && curTime > 5 && (Date.now() - lastSaveTime > 5000)) {
-    lastSaveTime = Date.now();
-    const key = `fmb_resume_${SUBJECT_ID}_${state.season}_${state.ep}`;
-    localStorage.setItem(key, String(Math.floor(curTime)));
-    saveToWatchHistory(curTime, dur);
-  }
-});
-video.addEventListener("loadedmetadata", () => {
-  const curTime = (state.seekOffset || 0) + video.currentTime;
-  const dur = getDur();
-  $("timeLabel").textContent = `${fmtTime(curTime)} / ${fmtTime(dur)}`;
-  updateDataMeter();
-});
-
-/* ---------- Resume Playback ---------- */
-function checkResumeProgress() {
-  if (!SUBJECT_ID) return;
-  const key = `fmb_resume_${SUBJECT_ID}_${state.season}_${state.ep}`;
-  const saved = localStorage.getItem(key);
-  const time = parseFloat(saved);
-  const bar = $("resumeBar");
-  if (time && time > 10) {
-    $("resumeTime").textContent = fmtTime(time);
-    bar.style.display = "flex";
-    $("resumeBtn").onclick = () => {
-      const raw = currentRaw();
-      if (raw && isHevcRes(raw)) {
-        state.seekOffset = Math.floor(time);
-        const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw)) + "&ss=" + state.seekOffset;
-        video.setAttribute("data-src", target);
-        video.src = target;
-      } else {
-        state.seekOffset = 0;
-        video.currentTime = time;
-      }
-      bar.style.display = "none";
-      video.play().catch(() => {});
-      toast("Resumed from " + fmtTime(time));
-    };
-  } else {
-    bar.style.display = "none";
-  }
-}
-
-/* ---------- Auto-Play Next Episode ---------- */
-let nextTimerInterval = null;
-video.addEventListener("ended", () => {
-  updatePlayUI();
-  if (state.model && state.model.isSeries) {
-    const curSeason = state.model.seasons[state.season];
-    if (curSeason && state.ep + 1 < curSeason.eps.length) {
-      const nextEpNum = state.ep + 2;
-      $("nextTitle").textContent = `Up Next: Episode ${nextEpNum}`;
-      const overlay = $("nextOverlay");
-      overlay.style.display = "flex";
-      let count = 5;
-      $("nextTimer").textContent = count;
-      clearInterval(nextTimerInterval);
-      nextTimerInterval = setInterval(() => {
-        count--;
-        $("nextTimer").textContent = count;
-        if (count <= 0) {
-          clearInterval(nextTimerInterval);
-          overlay.style.display = "none";
-          selectEpisode(state.ep + 1);
-        }
-      }, 1000);
-      $("nextPlayNowBtn").onclick = () => {
-        clearInterval(nextTimerInterval);
-        overlay.style.display = "none";
-        selectEpisode(state.ep + 1);
-      };
-      $("nextCancelBtn").onclick = () => {
-        clearInterval(nextTimerInterval);
-        overlay.style.display = "none";
-      };
-      return;
-    }
-  }
-  toast("Playback ended");
-});
-
-const progress = $("progress");
-function seekAt(clientX) {
-  const r = progress.getBoundingClientRect();
-  const pct = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
-  const dur = getDur();
-  const targetTime = pct * dur;
-
-  video.removeAttribute("poster");
-  $("bufferingSpinner").style.display = "flex";
-
-  const raw = currentRaw();
-  if (raw && isHevcRes(raw)) {
-    state.seekOffset = Math.floor(targetTime);
-    const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw)) + "&ss=" + state.seekOffset;
-    video.setAttribute("data-src", target);
-    video.src = target;
-    video.play().catch(() => {});
-  } else {
-    state.seekOffset = 0;
-    if (dur && !isNaN(targetTime)) {
-      video.currentTime = targetTime;
-    }
-  }
-}
-progress.addEventListener("pointerdown", e => {
-  state.drag = true;
-  progress.setPointerCapture(e.pointerId);
-  seekAt(e.clientX);
-  const curTime = (state.seekOffset || 0) + video.currentTime;
-  const dur = getDur();
-  $("progressFill").style.width = Math.min(100, ((dur ? curTime / dur : 0) * 100)) + "%";
-});
-progress.addEventListener("pointermove", e => {
-  if (state.drag) {
-    seekAt(e.clientX);
-    const curTime = (state.seekOffset || 0) + video.currentTime;
-    const dur = getDur();
-    const pct = dur ? (curTime / dur) * 100 : 0;
-    $("progressFill").style.width = Math.min(100, pct) + "%";
-    $("timeLabel").textContent = `${fmtTime(curTime)} / ${fmtTime(dur)}`;
-  }
-});
-progress.addEventListener("pointerup", () => { state.drag = false; });
-
-const volSlider = $("volSlider");
-if ($("volBtn")) {
-  $("volBtn").addEventListener("click", () => {
-    video.muted = !video.muted;
-    if (volSlider) volSlider.value = video.muted ? 0 : video.volume;
-    syncVol();
-  });
-}
-if (volSlider) {
-  volSlider.addEventListener("input", () => {
-    video.volume = parseFloat(volSlider.value);
-    video.muted = video.volume === 0;
-    syncVol();
-  });
-}
-function syncVol() {
-  const muted = video.muted || video.volume === 0;
-  if ($("iconVol")) $("iconVol").style.display = muted ? "none" : "block";
-  if ($("iconMute")) $("iconMute").style.display = muted ? "block" : "none";
-}
-syncVol();
-
-$("fsBtn").addEventListener("click", () => {
-  if (!document.fullscreenElement) player.requestFullscreen().catch(() => {});
-  else document.exitFullscreen();
-});
-document.addEventListener("fullscreenchange", () => { state.fullscreen = !!document.fullscreenElement; });
-
-let idleTimer = null;
-function wakeIdle() {
-  player.classList.remove("idle");
-  clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => { if (state.playing && !state.drag) player.classList.add("idle"); }, 2600);
-}
-player.addEventListener("mousemove", wakeIdle);
-player.addEventListener("pointermove", wakeIdle);
-video.addEventListener("play", wakeIdle);
-video.addEventListener("pause", () => { player.classList.remove("idle"); clearTimeout(idleTimer); });
-
 if ($("playAppBtn")) {
   $("playAppBtn").addEventListener("click", () => openPlayModal());
-}
-if ($("bigPlay")) {
-  $("bigPlay").addEventListener("click", () => openPlayModal());
 }
 
 /* ---------- External Player & Stream Hub Modal ---------- */
@@ -1720,10 +1203,7 @@ function downloadCurrentStream() {
   location.href = `/download?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(title)}`;
 }
 
-function playInWebPlayer() {
-  closePlayModal();
-  applyStream(true);
-}
+
 
 async function onPlaySeasonChange() {
   const seSel = $("playSeasonSelect");
@@ -2119,35 +1599,29 @@ async function selectSeason(i) {
 
 async function selectEpisode(i) {
   state.ep = i;
-  watchLogged = false;
   const m = state.model;
-  const e = currentEp();
-  const se = m.seasons[state.season].se;
+  const e = currentEp() || { num: i + 1, name: `Episode ${i + 1}` };
+  const se = m.seasons[state.season]?.se ?? state.season;
   renderEpisodes();
-  $("epLabel").textContent = m.isSeries
-    ? `S${state.season + 1} E${e.num} · ${e.name}`
-    : m.title;
-  video.poster = e.thumb || m.cover;
+  if ($("heroPosterImg") && (e.thumb || m.cover)) {
+    $("heroPosterImg").src = e.thumb || m.cover;
+  }
   setError("");
   if (SUBJECT_ID) {
     try {
-      await fetchEpisodeResources(se, e.num || 0, true);
+      await fetchEpisodeResources(se, e.num || 0, false);
     } catch (err) {
       setError(err.message || "Failed to load stream");
-      toast("Could not load stream: " + err.message);
     }
   } else {
     state.baseList = [];
     state.dubLists = [];
     state.curDub = '';
-    const idx = m._globalIdx(i);
+    const idx = m._globalIdx ? m._globalIdx(i) : i;
     buildOptions(QUALITIES.map(q => ({ resolution: parseInt(q, 10), codecName: 'h264', resourceLink: gtv(VIDS[idx % 13]) })));
     renderMenus();
     renderLangMenu();
-    applyStream(true);
   }
-  player.scrollIntoView({ behavior: "smooth", block: "center" });
-  if (m.isSeries) toast(`Now playing: S${state.season + 1}E${e.num} ${e.name}`);
 }
 
 /* ---------- Data loading ---------- */
