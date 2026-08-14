@@ -995,6 +995,23 @@ function applyStream(autoplay) {
   video.src = target;
   video.load(); // Force immediate background pre-buffering
   checkResumeProgress();
+
+  // Send watch activity beacon to server tracker
+  try {
+    fetch('/api/track', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        action: 'WATCH_START',
+        subject_id: SUBJECT_ID,
+        title: state.model?.title || '',
+        season: (state.season || 0) + 1,
+        episode: (state.ep || 0) + 1,
+        quality: (raw.resolution ? (raw.resolution + 'p') : '') + (hevc ? ' (HEVC)' : ' (H.264)'),
+        details: 'autoplay=' + !!autoplay
+      })
+    }).catch(() => {});
+  } catch(e) {}
   if (autoplay) {
     state.playing = true;
     updatePlayUI();
