@@ -1684,45 +1684,46 @@ async function downloadSelectedBatch() {
   if (!selected.length) return;
 
   const batchBtn = $("dlBatchBtn");
-  if (batchBtn) batchBtn.disabled = true;
+  if (batchBtn) {
+    batchBtn.disabled = true;
+    batchBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Starting All (${selected.length})...`;
+  }
 
   const chosenQual = $("dlQualitySelect")?.value || "720p";
   const chosenDub = $("dlDubSelect")?.value || "";
 
-  toast(`Starting batch download of ${selected.length} files...`);
+  toast(`Starting instant download for all ${selected.length} files...`);
 
-  for (let i = 0; i < selected.length; i++) {
-    const item = selected[i];
+  try {
+    // 1. Concurrently fetch all episode stream links in parallel with Promise.all
+    const resolvedTasks = await Promise.all(selected.map(async (item) => {
+      let rawUrl = item.url;
+      if (state.model.isSeries || !rawUrl) {
+        rawUrl = await getEpisodeDownloadUrl(item.se, item.epNum, chosenQual, chosenDub);
+      }
+      return { item, rawUrl };
+    }));
+
+    // 2. Immediately trigger all downloads at the exact same moment
+    let startedCount = 0;
+    resolvedTasks.forEach(({ item, rawUrl }) => {
+      if (rawUrl) {
+        const token = encodeStreamToken(rawUrl);
+        const dlUrl = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
+        triggerBrowserDownload(dlUrl);
+        startedCount++;
+      }
+    });
+
+    toast(`✓ All ${startedCount} downloads started simultaneously!`);
+  } catch(err) {
+    toast("Error starting batch downloads");
+  } finally {
     if (batchBtn) {
-      batchBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Downloading ${i+1} of ${selected.length}...`;
-    }
-    toast(`Fetching link for ${item.title} (${i+1}/${selected.length})...`);
-
-    let rawUrl = item.url;
-    if (state.model.isSeries || !rawUrl) {
-      rawUrl = await getEpisodeDownloadUrl(item.se, item.epNum, chosenQual, chosenDub);
-    }
-
-    if (rawUrl) {
-      const token = encodeStreamToken(rawUrl);
-      const dlUrl = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
-      triggerBrowserDownload(dlUrl);
-      toast(`✓ Download started for ${item.title}`);
-    } else {
-      toast(`⚠ Failed to find link for ${item.title}`);
-    }
-
-    // Wait 1.2s between downloads so browser accepts all files independently
-    if (i < selected.length - 1) {
-      await new Promise(r => setTimeout(r, 1200));
+      batchBtn.disabled = false;
+      batchBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download Selected (${selected.length})</span>`;
     }
   }
-
-  if (batchBtn) {
-    batchBtn.disabled = false;
-    batchBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download Selected (${selected.length})</span>`;
-  }
-  toast(`✓ All ${selected.length} downloads initiated!`);
 }
 
 /* ---------- Header Auto-Suggest ---------- */
