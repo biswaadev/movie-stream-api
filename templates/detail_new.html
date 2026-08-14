@@ -488,8 +488,17 @@
         </button>
       </div>
 
+      <!-- Device specific helpful hint -->
+      <div id="playerHintBox" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--muted);line-height:1.5;margin-top:2px;">
+        <span style="color:#ffc107;font-weight:700;">💡 Tip for PC & Phone:</span>
+        <div id="playerHintText" style="margin-top:4px;">
+          • <strong>PC/Laptop:</strong> VLC button generates a <code>.m3u</code> playlist file. Double-click it to start streaming in VLC/PotPlayer, or in VLC press <code>Ctrl+N</code> & Enter (Stream link is auto-copied).<br/>
+          • <strong>Android Phone:</strong> Click VLC or MX Player. If MX Player is missing, you can install it or open in your phone's default player.
+        </div>
+      </div>
+
       <!-- Quick Download Row -->
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);">
         <button onclick="downloadCurrentStream()" style="background:none;border:none;color:#1e90ff;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Direct Download (<span id="playFileSizeLabel">—</span>)
@@ -1150,32 +1159,78 @@ function launchExternalPlayer(type) {
 
   const isAndroid = /android/i.test(navigator.userAgent);
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isPC = !isAndroid && !isIOS;
 
-  toast("Opening in player app...");
+  const m = state.model;
+  const e = currentEp();
+  const title = (m?.title || "Video") + (m?.isSeries ? ` S${state.season+1}E${e?.num || (state.ep+1)}` : "");
 
-  if (type === 'auto') {
-    if (isAndroid) {
+  if (isPC) {
+    // 1. Copy URL to clipboard
+    navigator.clipboard.writeText(streamUrl).catch(() => {});
+    // 2. Generate .m3u playlist file for instant 1-click launch in VLC / PotPlayer
+    downloadM3U(streamUrl, title);
+    // 3. Try custom protocol if VLC is chosen
+    if (type === 'vlc') {
+      window.location.href = `vlc://${streamUrl}`;
+    }
+    toast("✓ .m3u playlist downloaded! Open it to stream in VLC, or in VLC press Ctrl+N and Enter (Link copied)");
+    return;
+  }
+
+  // Mobile (Android / iOS)
+  if (isAndroid) {
+    if (type === 'mx') {
+      const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.ad;end`;
+      const startTime = Date.now();
+      window.location.href = intentUrl;
+      setTimeout(() => {
+        if (Date.now() - startTime < 2000) {
+          if (confirm("MX Player aapke phone me install nahi hai! Kya aap Play Store se install karna chahte hain?")) {
+            window.location.href = "https://play.google.com/store/apps/details?id=com.mxtech.videoplayer.ad";
+          } else {
+            window.location.href = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
+          }
+        }
+      }, 1200);
+    } else if (type === 'vlc') {
+      const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end`;
+      const startTime = Date.now();
+      window.location.href = intentUrl;
+      setTimeout(() => {
+        if (Date.now() - startTime < 2000) {
+          if (confirm("VLC Player aapke phone me install nahi hai! Kya aap Play Store se install karna chahte hain?")) {
+            window.location.href = "https://play.google.com/store/apps/details?id=org.videolan.vlc";
+          } else {
+            window.location.href = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
+          }
+        }
+      }, 1200);
+    } else {
+      // Universal Android Video Player Chooser
       const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;end`;
       window.location.href = intentUrl;
-    } else {
-      window.location.href = `vlc://${streamUrl}`;
     }
-  } else if (type === 'vlc') {
-    if (isAndroid) {
-      const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end`;
-      window.location.href = intentUrl;
-      setTimeout(() => { window.location.href = `vlc://${streamUrl}`; }, 800);
-    } else {
-      window.location.href = `vlc://${streamUrl}`;
-    }
-  } else if (type === 'mx') {
-    if (isAndroid) {
-      const intentUrl = `intent:${streamUrl}#Intent;action=android.intent.action.VIEW;type=video/*;package=com.mxtech.videoplayer.ad;end`;
-      window.location.href = intentUrl;
-    } else {
-      window.location.href = `vlc://${streamUrl}`;
-    }
+  } else if (isIOS) {
+    window.location.href = `vlc://${streamUrl}`;
+    setTimeout(() => {
+      window.location.href = `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(streamUrl)}`;
+    }, 500);
   }
+}
+
+function downloadM3U(streamUrl, title) {
+  const cleanTitle = (title || "stream").replace(/[\\/:*?"<>|]/g, '_');
+  const content = `#EXTM3U\n#EXTINF:-1,${cleanTitle}\n${streamUrl}\n`;
+  const blob = new Blob([content], { type: 'audio/x-mpegurl' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${cleanTitle}.m3u`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 async function copyCurrentStreamLink() {
@@ -1186,7 +1241,7 @@ async function copyCurrentStreamLink() {
   }
   try {
     await navigator.clipboard.writeText(streamUrl);
-    toast("✓ Stream URL copied! Paste in VLC (Media > Open Network Stream)");
+    toast("✓ Stream URL copied! In VLC press Ctrl+N and Enter");
   } catch {
     prompt("Copy this stream URL:", streamUrl);
   }
