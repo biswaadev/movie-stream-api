@@ -212,6 +212,7 @@ def trending():
         return jsonify({"error": str(e)}), 500
 
 
+import shutil
 import subprocess
 
 # ---------------------------------------------------------------------------
@@ -220,7 +221,7 @@ import subprocess
 @app.route("/stream")
 def stream():
     url = request.args.get("url", "")
-    if not url or ("hakunaymatata.com" not in url and "aoneroom" not in url):
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
         return jsonify({"error": "Invalid stream URL"}), 400
 
     range_header = request.headers.get("Range")
@@ -237,7 +238,7 @@ def stream():
         headers["Range"] = range_header
 
     try:
-        resp = api._session.get(url, headers=headers, stream=True, timeout=10)
+        resp = api._session.get(url, headers=headers, stream=True, timeout=15)
     except Exception as e:
         return jsonify({"error": str(e)}), 502
 
@@ -273,51 +274,58 @@ def stream():
 def stream_transcode():
     """On-the-fly H.264 video transcoding with fast seeking using ffmpeg."""
     url = request.args.get("url", "")
-    if not url or ("hakunaymatata.com" not in url and "aoneroom" not in url):
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
         return jsonify({"error": "Invalid stream URL"}), 400
 
-    ss = request.args.get("ss", "0").strip()
-    headers_str = f"User-Agent: {api.ANDROID_USER_AGENT}\r\n\r\n"
+    # If ffmpeg is not available, fallback to direct proxy
+    if not shutil.which("ffmpeg"):
+        return stream()
 
-    cmd = ["ffmpeg"]
     try:
-        ss_val = float(ss)
-        if ss_val > 0:
-            cmd.extend(["-ss", str(ss_val)])
-    except ValueError:
-        pass
+        ss = request.args.get("ss", "0").strip()
+        headers_str = f"User-Agent: {api.ANDROID_USER_AGENT}\r\n\r\n"
 
-    cmd.extend([
-        "-headers", headers_str,
-        "-i", url,
-        "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-tune", "zerolatency",
-        "-crf", "26",
-        "-c:a", "copy",
-        "-f", "mp4",
-        "-movflags", "frag_keyframe+empty_moov+default_base_moof",
-        "pipe:1"
-    ])
-
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=64 * 1024)
-
-    def generate():
+        cmd = ["ffmpeg"]
         try:
-            while True:
-                data = proc.stdout.read(32 * 1024)
-                if not data:
-                    break
-                yield data
-        finally:
-            try:
-                proc.terminate()
-            except Exception:  # noqa
-                pass
+            ss_val = float(ss)
+            if ss_val > 0:
+                cmd.extend(["-ss", str(ss_val)])
+        except ValueError:
+            pass
 
-    resp = Response(generate(), status=200, content_type="video/mp4")
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    return resp
+        cmd.extend([
+            "-headers", headers_str,
+            "-i", url,
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-tune", "zerolatency",
+            "-crf", "26",
+            "-c:a", "copy",
+            "-f", "mp4",
+            "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+            "pipe:1"
+        ])
+
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=64 * 1024)
+
+        def generate():
+            try:
+                while True:
+                    data = proc.stdout.read(32 * 1024)
+                    if not data:
+                        break
+                    yield data
+            finally:
+                try:
+                    proc.terminate()
+                except Exception:  # noqa
+                    pass
+
+        resp = Response(generate(), status=200, content_type="video/mp4")
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+    except Exception:
+        return stream()
 
 
 # ---------------------------------------------------------------------------

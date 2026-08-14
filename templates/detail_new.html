@@ -991,20 +991,7 @@ function applyStream(autoplay) {
   updateDataMeter();
 
   const rawUrl = rawUrlOf(raw);
-  const hevc = isHevcRes(raw);
-
-  // *** INSTANT PLAYBACK ENGINE ***
-  // Use direct CDN URL for non-HEVC streams - Service Worker intercepts
-  // the request and injects required User-Agent header automatically.
-  // This eliminates Flask proxy double-hop: Browser → CDN directly!
-  // HEVC still goes through /stream_transcode (requires server ffmpeg).
-  let target;
-  if (hevc) {
-    target = "/stream_transcode?url=" + encodeURIComponent(rawUrl);
-  } else {
-    // Direct CDN URL - SW will add User-Agent header
-    target = rawUrl;
-  }
+  const target = "/stream?url=" + encodeURIComponent(rawUrl);
   if (target === video.getAttribute("data-src")) { if (autoplay && state.playing) video.play().catch(() => {}); return; }
   video.setAttribute("data-src", target);
   video.src = target;
@@ -1115,34 +1102,27 @@ video.addEventListener("progress", updateDataMeter);
 video.addEventListener("error", () => {
   $("bufferingSpinner") && ($("bufferingSpinner").style.display = "none");
   const raw = currentRaw();
-  const curSrc = video.getAttribute("data-src") || "";
 
-  // Fallback 1: Direct CDN failed → try Flask proxy /stream
-  if (raw && !isHevcRes(raw) && !curSrc.includes("/stream")) {
-    const target = "/stream?url=" + encodeURIComponent(rawUrlOf(raw));
-    video.setAttribute("data-src", target);
-    video.src = target;
-    video.load();
-    video.play().catch(() => {});
-    return;
-  }
-
-  // Fallback 2: If HEVC on /stream, try /stream_transcode
-  if (raw && isHevcRes(raw) && curSrc.includes("/stream?") && !curSrc.includes("/stream_transcode")) {
-    const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw));
-    video.setAttribute("data-src", target);
-    video.src = target;
-    video.play().catch(() => {});
-    return;
-  }
-
-  // Fallback 3: Try auto-fallback to H.264 stream if current was HEVC
+  // If HEVC failed on user's browser, auto-fallback to H.264 if available
   if (raw && isHevcRes(raw) && state.options && state.options.length > 1) {
     const h264Idx = state.options.findIndex(o => !o.hevc);
     if (h264Idx !== -1 && h264Idx !== state.curIndex) {
       state.curIndex = h264Idx;
       renderMenus();
-      toast("HEVC not supported natively; auto-switching to H.264...");
+      toast("HEVC not supported by your browser; switching to " + (state.options[h264Idx].label || "H.264") + "...");
+      applyStream(true);
+      return;
+    }
+  }
+
+  // Try next available quality stream
+  if (state.options && state.options.length > 1 && !state._streamRetried) {
+    state._streamRetried = true;
+    const nextIdx = (state.curIndex + 1) % state.options.length;
+    if (nextIdx !== state.curIndex) {
+      state.curIndex = nextIdx;
+      renderMenus();
+      toast("Retrying with " + (state.options[nextIdx].label || "alternative stream") + "...");
       applyStream(true);
       return;
     }
@@ -1289,15 +1269,8 @@ function checkResumeProgress() {
     $("resumeTime").textContent = fmtTime(time);
     bar.style.display = "flex";
     $("resumeBtn").onclick = () => {
-      const raw = currentRaw();
-      if (raw && isHevcRes(raw)) {
-        state.seekOffset = Math.floor(time);
-        const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw)) + "&ss=" + state.seekOffset;
-        video.setAttribute("data-src", target);
-        video.src = target;
-      } else {
-        video.currentTime = time;
-      }
+      state.seekOffset = 0;
+      video.currentTime = time;
       bar.style.display = "none";
       video.play().catch(() => {});
       toast("Resumed from " + fmtTime(time));
@@ -1355,16 +1328,9 @@ function seekAt(clientX) {
   video.removeAttribute("poster");
   $("bufferingSpinner").style.display = "flex";
 
-  const raw = currentRaw();
-  if (raw && isHevcRes(raw)) {
-    state.seekOffset = Math.floor(targetTime);
-    const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw)) + "&ss=" + state.seekOffset;
-    video.setAttribute("data-src", target);
-    video.src = target;
-    video.play().catch(() => {});
-  } else {
-    state.seekOffset = 0;
-    if (dur) video.currentTime = targetTime;
+  state.seekOffset = 0;
+  if (dur && !isNaN(targetTime)) {
+    video.currentTime = targetTime;
   }
 }
 progress.addEventListener("pointerdown", e => {
