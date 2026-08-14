@@ -206,25 +206,14 @@
     margin-top: 14px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 4px 2px 14px;
+    padding: 4px 2px 8px;
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(229, 9, 20, 0.4) rgba(255, 255, 255, 0.04);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
   .ep-grid::-webkit-scrollbar {
-    height: 6px;
-  }
-  .ep-grid::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 999px;
-  }
-  .ep-grid::-webkit-scrollbar-thumb {
-    background: rgba(229, 9, 20, 0.45);
-    border-radius: 999px;
-  }
-  .ep-grid::-webkit-scrollbar-thumb:hover {
-    background: #e50914;
+    display: none;
   }
   .ep-box {
     flex: 0 0 52px;
@@ -459,11 +448,6 @@
       <div class="season-tabs" id="seasonTabs"></div>
     </div>
     <div class="ep-grid" id="epGrid"></div>
-  </section>
-
-  <section id="synopsis">
-    <div class="sec-head"><h2>Synopsis</h2></div>
-    <p class="synopsis" id="synText"></p>
   </section>
 
 </main>
