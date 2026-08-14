@@ -3,10 +3,10 @@ import multiprocessing
 import os
 
 bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"
-workers = 4
-threads = 8
-worker_class = "gthread"
-timeout = 120
+workers = min(multiprocessing.cpu_count() * 2 + 1, 8)
+worker_class = "gevent"
+worker_connections = 2000
+timeout = 60
 keepalive = 5
 
 # Hygiene: auto-recycle workers to keep RAM 100% clean
