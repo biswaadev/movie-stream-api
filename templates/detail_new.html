@@ -805,10 +805,16 @@ function isHevcRes(r) {
 function buildOptions(list) {
   const out = [];
   const seen = new Set();
-  for (const r of list) {
-    const url = String(r.resourceLink || r.url || r.link || '');
-    if (url.includes('tran-audio')) continue; // Skip audio-only track links for video player
 
+  // Strictly filter out audio-only tracks (e.g. tran-audio dub URLs) for video playback
+  const videoStreams = list.filter(r => {
+    const u = String(r.resourceLink || r.url || r.link || '').toLowerCase();
+    return !u.includes('tran-audio') && !u.includes('/audio/');
+  });
+
+  const sourceList = videoStreams.length ? videoStreams : list;
+
+  for (const r of sourceList) {
     const rawRes = parseInt(r.resolution, 10);
     const hevc = isHevcRes(r);
     const baseLabel = rawRes ? rawRes + 'p' : String(r.quality || r.resolution || r.name || '').trim();
@@ -818,32 +824,16 @@ function buildOptions(list) {
     seen.add(key);
     out.push({ label: fullLabel, baseRes: rawRes || 0, res: r, hevc });
   }
-  if (!out.length) {
-    for (const r of list) {
-      if (!String(r.resourceLink || '').includes('tran-audio')) {
-        out.push({ label: r.quality || r.name || 'Stream', baseRes: 0, res: r, hevc: isHevcRes(r) });
-      }
-    }
-  }
+
   if (!out.length && list.length) {
-    out.push({ label: 'Audio Only', baseRes: 0, res: list[0], hevc: false });
+    out.push({ label: 'Stream', baseRes: 0, res: list[0], hevc: isHevcRes(list[0]) });
   }
 
-  // Sort by resolution ascending; H.264 first
-  out.sort((a, b) => {
-    if (a.baseRes !== b.baseRes) return a.baseRes - b.baseRes;
-    return a.hevc ? 1 : -1;
-  });
-
-  // Default auto-select: highest H.264 stream so video renders in all browsers
-  let best = -1;
-  for (let i = out.length - 1; i >= 0; i--) {
-    if (!out[i].hevc) { best = i; break; }
-  }
-  if (best === -1) best = Math.max(0, out.length - 1);
+  // Sort by resolution ascending (e.g. 480p, 720p, 1080p)
+  out.sort((a, b) => a.baseRes - b.baseRes);
 
   state.options = out;
-  state.curIndex = best;
+  state.curIndex = Math.max(0, out.length - 1);
 }
 
 function currentRaw() {
@@ -858,14 +848,18 @@ function rawUrlOf(res) {
 function getQualitiesSummary(list) {
   if (!list || !list.length) return "N/A";
   const resSet = new Set();
-  list.forEach(r => {
-    const rawRes = parseInt(r.resolution, 10);
-    if (rawRes) resSet.add(rawRes + 'p');
-    else if (r.quality) resSet.add(r.quality);
-  });
-  const arr = Array.from(resSet).sort((a, b) => parseInt(a) - parseInt(b));
-  return arr.length ? arr.join(' · ') : `${list.length} stream${list.length > 1 ? 's' : ''}`;
+  for (const r of list) {
+    const u = String(r.resourceLink || r.url || r.link || '').toLowerCase();
+    if (u.includes('tran-audio')) continue;
+    const num = parseInt(r.resolution, 10);
+    if (num > 0) resSet.add(num);
+  }
+  const arr = Array.from(resSet).sort((a, b) => a - b);
+  if (!arr.length) return "HD";
+  return arr.map(n => n + "p").join(" / ");
 }
+
+let watchLogged = false;
 
 function renderMenus() {
   $("speedLabel").textContent = state.speed + "x";
@@ -981,37 +975,19 @@ function applyStream(autoplay) {
   const t = video.currentTime;
 
   state.seekOffset = 0;
+  watchLogged = false; // Reset 5-second watch tracking
   const rawDur = parseInt(raw.duration, 10);
   const modelDur = (parseInt(state.model?.durMinutes, 10) || 0) * 60;
   state.totalDur = rawDur || modelDur || 0;
 
   const rawUrl = rawUrlOf(raw);
-  const hevc = isHevcRes(raw);
-  const target = hevc
-    ? ("/stream_transcode?url=" + encodeURIComponent(rawUrl))
-    : ("/stream?url=" + encodeURIComponent(rawUrl));
+  const target = "/stream_transcode?url=" + encodeURIComponent(rawUrl);
   if (target === video.getAttribute("data-src")) { if (autoplay && state.playing) video.play().catch(() => {}); return; }
   video.setAttribute("data-src", target);
   video.src = target;
   video.load(); // Force immediate background pre-buffering
   checkResumeProgress();
 
-  // Send watch activity beacon to server tracker
-  try {
-    fetch('/api/track', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        action: 'WATCH_START',
-        subject_id: SUBJECT_ID,
-        title: state.model?.title || '',
-        season: (state.season || 0) + 1,
-        episode: (state.ep || 0) + 1,
-        quality: (raw.resolution ? (raw.resolution + 'p') : '') + (hevc ? ' (HEVC)' : ' (H.264)'),
-        details: 'autoplay=' + !!autoplay
-      })
-    }).catch(() => {});
-  } catch(e) {}
   if (autoplay) {
     state.playing = true;
     updatePlayUI();
@@ -1257,6 +1233,27 @@ video.addEventListener("timeupdate", () => {
   $("progressFill").style.width = Math.min(100, pct) + "%";
   $("timeLabel").textContent = `${fmtTime(curTime)} / ${fmtTime(dur)}`;
   updateDataMeter();
+
+  // Log WATCH event in admin panel ONLY when user watches 5+ seconds
+  if (!watchLogged && video.currentTime >= 5 && !video.paused) {
+    watchLogged = true;
+    const raw = currentRaw();
+    try {
+      fetch('/api/track', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          action: 'WATCH',
+          subject_id: SUBJECT_ID,
+          title: state.model?.title || '',
+          season: (state.season || 0) + 1,
+          episode: (state.ep || 0) + 1,
+          quality: raw ? (raw.resolution ? (raw.resolution + 'p') : (raw.quality || '')) : '',
+          details: 'watched_5s_plus'
+        })
+      }).catch(() => {});
+    } catch(e) {}
+  }
 
   // Save progress every 5 seconds
   if (SUBJECT_ID && curTime > 5 && (Date.now() - lastSaveTime > 5000)) {
