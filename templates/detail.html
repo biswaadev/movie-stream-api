@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flask MovieBox — Detail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #171a22;
+    --surface2: #222631;
+    --accent: #e50914;
+    --accent-hover: #f40612;
+    --text: #f5f5f7;
+    --muted: #9aa0ad;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  /* Header */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(13,15,20,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 14px 24px;
+    display: flex; align-items: center; gap: 18px;
+  }
+  .logo {
+    font-weight: 800; font-size: 20px; letter-spacing: -0.5px;
+    color: var(--accent); white-space: nowrap; cursor: pointer;
+  }
+  .logo span { color: var(--text); }
+  .search-wrap {
+    flex: 1; max-width: 640px; display: flex; gap: 10px; align-items: center;
+  }
+  #searchInput {
+    flex: 1; min-width: 0;
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  #searchInput:focus { border-color: var(--accent); }
+  #searchBtn {
+    background: var(--accent); color: white; border: none;
+    border-radius: 10px; padding: 12px 22px;
+    font-weight: 600; font-size: 14px; cursor: pointer;
+  }
+  #searchBtn:hover { background: var(--accent-hover); }
+  .back-link {
+    color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .back-link:hover { color: var(--text); }
+
+  main { padding: 24px 24px 60px; max-width: 1120px; margin: 0 auto; }
+
+  /* Hero */
+  .hero {
+    display: flex; gap: 26px; align-items: flex-start;
+  }
+  .poster {
+    width: 260px; flex-shrink: 0;
+    border-radius: var(--radius); overflow: hidden;
+    background: var(--surface2);
+  }
+  .poster img { width: 100%; height: auto; display: block; }
+  .hero .content { flex: 1; min-width: 0; }
+  .hero h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 10px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+  .tag {
+    background: var(--surface2);
+    font-size: 12px; color: var(--muted);
+    padding: 4px 10px; border-radius: 999px;
+  }
+  .desc { font-size: 14px; line-height: 1.7; color: var(--muted); }
+  .dub-strip { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .dub-chip {
+    background: rgba(229,9,20,0.12); color: #ff7a81;
+    border: 1px solid rgba(229,9,20,0.35);
+    border-radius: 999px; font-size: 12px; font-weight: 600;
+    padding: 4px 12px;
+  }
+  .loading-state { text-align: center; padding: 70px 20px; color: var(--muted); }
+  .loading-state .spinner {
+    width: 40px; height: 40px; margin: 0 auto 16px;
+    border: 3px solid rgba(255,255,255,0.12);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-state { text-align: center; padding: 70px 20px; color: #ff6b6b; }
+
+  /* Player section */
+  .player-section { margin-top: 28px; }
+  .player-section h2 { font-size: 18px; font-weight: 700; margin-bottom: 14px; }
+  #playerWrap { display: none; }
+  #playerWrap video {
+    width: 100%; border-radius: var(--radius);
+    background: #000; max-height: 560px;
+  }
+  /* In-player control bar */
+  .control-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    margin-top: 12px;
+  }
+  .control-group {
+    position: relative; display: inline-block;
+  }
+  .control-label {
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.6px;
+    margin-right: 8px;
+  }
+  .control-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 9px 16px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .control-btn:hover { border-color: var(--accent); }
+  .control-btn svg { opacity: 0.8; }
+  .control-menu {
+    position: absolute; bottom: calc(100% + 8px); left: 0;
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 6px;
+    min-width: 200px;
+    max-height: 300px; overflow-y: auto;
+    display: none;
+    box-shadow: 0 14px 36px rgba(0,0,0,0.55);
+    z-index: 20;
+  }
+  .control-menu.open { display: block; }
+  .menu-item {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    background: none; border: none; color: var(--text);
+    font-size: 13px; font-weight: 500;
+    padding: 9px 12px; border-radius: 8px;
+    cursor: pointer; text-align: left;
+  }
+  .menu-item:hover { background: var(--surface2); }
+  .menu-item.active { color: var(--accent); }
+  .menu-item .item-meta { margin-left: auto; color: var(--muted); font-size: 11px; }
+  .menu-item.active .item-meta { color: var(--muted); }
+  .menu-item .check { color: var(--accent); font-weight: 700; }
+  .menu-empty {
+    color: var(--muted); font-size: 12px;
+    padding: 10px 12px;
+  }
+  .actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .play-btn, .download-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    border-radius: 10px; padding: 12px 26px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .play-btn {
+    background: var(--accent); color: white; border: none;
+  }
+  .play-btn:hover { background: var(--accent-hover); }
+  .play-btn:disabled, .download-btn:disabled { opacity: 0.5; cursor: wait; }
+  .download-btn {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .download-btn:hover { background: #2d3342; border-color: var(--accent); color: var(--accent); }
+
+  /* Episodes */
+  .ep-section { margin-top: 28px; display: none; }
+  .ep-section h2 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+  .season-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .season-tab {
+    background: var(--surface2); border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text); border-radius: 8px;
+    padding: 7px 14px; font-size: 13px; cursor: pointer;
+  }
+  .season-tab:hover, .season-tab.active { background: var(--accent); border-color: var(--accent); }
+  .ep-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ep-btn {
+    background: var(--surface2); border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text); border-radius: 8px;
+    padding: 8px 13px; font-size: 12px; cursor: pointer;
+  }
+  .ep-btn:hover { border-color: var(--accent); }
+  .ep-btn.active { background: var(--accent); border-color: var(--accent); }
+
+  footer {
+    text-align: center; color: var(--muted); font-size: 12px;
+    padding: 20px; border-top: 1px solid rgba(255,255,255,0.05);
+    margin-top: 40px;
+  }
+  @media (max-width: 760px) {
+    .hero { flex-direction: column; }
+    .poster { width: 170px; }
+    .control-bar { gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo" onclick="location.href='/'">Flask<span>MovieBox</span></div>
+  <div class="search-wrap">
+    <input id="searchInput" type="text" placeholder="Search movies, series, anime..." />
+    <button id="searchBtn">Search</button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="loading-state" id="loadState">
+    <div class="spinner"></div>
+    Loading details...
+  </div>
+</main>
+
+<footer>Flask MovieBox — upstream MovieBox API, server-side signed requests</footer>
+
+<script>
+const SUBJECT_ID = {{ subject_id | tojson }};
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function humanSize(s) {
+  const n = parseInt(s, 10);
+  if (!n) return '';
+  if (n > 1e9) return (n / 1e9).toFixed(2) + ' GB';
+  if (n > 1e6) return (n / 1e6).toFixed(0) + ' MB';
+  return (n / 1e3).toFixed(0) + ' KB';
+}
+
+const main = document.getElementById('main');
+
+// ---------- Global state ----------
+const state = {
+  detail: null,
+  seasons: [],       // [{se, maxEp, title}]
+  resList: [],       // current episode's resource list
+  curRes: 0,         // currently selected resource index
+  se: 0, ep: 0,
+  isSeries: false,
+  currentLabel: '',
+};
+
+// ---------- Header search (navigate back to home with query) ----------
+document.getElementById('searchBtn').addEventListener('click', () => {
+  const q = document.getElementById('searchInput').value.trim();
+  if (q) location.href = '/?q=' + encodeURIComponent(q);
+});
+document.getElementById('searchInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('searchBtn').click();
+});
+if (location.search.includes('q=')) {
+  const m = location.search.match(/[?&]q=([^&]*)/);
+  if (m) document.getElementById('searchInput').value = decodeURIComponent(m[1]);
+}
+
+// ---------- Detail + player boot ----------
+async function boot() {
+  try {
+    const [detail, seasons, resources, dubResources] = await Promise.all([
+      fetch(`/api/detail/${SUBJECT_ID}`).then(r => r.json()),
+      fetch(`/api/seasons/${SUBJECT_ID}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/resources?subjectId=${SUBJECT_ID}&se=0&ep=0`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/resources_dubs?subjectId=${SUBJECT_ID}&se=0&ep=0`).then(r => r.json()).catch(() => ({})),
+    ]);
+    if (detail.error) throw new Error(detail.error);
+    state.detail = detail.data || detail;
+    const seasonList = (seasons?.data?.seasons || seasons?.data || []).filter(x => (x?.maxEp ?? 1) > 0);
+    state.seasons = seasonList;
+    state.isSeries = [2, 5].includes(state.detail.subjectType) || seasonList.length > 0;
+    const resList = resources?.data?.list || resources?.list || [];
+    if (resList.length) state.resList = resList;
+    const dubs = (dubResources?.dubs || []).filter(x => (x.list || []).length);
+    state.dubLists = dubs;
+    if (dubs.length) {
+      const idx = dubs.findIndex(x => String(x.subjectId) === String(SUBJECT_ID));
+      state.curDub = idx !== -1 ? idx : 0;
+    }
+    render(detail.data || detail, seasonList, resList);
+  } catch (e) {
+    main.innerHTML = `<div class="error-state">⚠ ${esc(e.message)}<br/><span style="font-size:13px;color:var(--muted)">Try another title from the home page.</span></div>`;
+  }
+}
+
+function render(d, seasonList, resList) {
+  const cover = d.cover || d.imageList || d.images || {};
+  const src = (cover && (cover.url || (Array.isArray(cover) && cover[0] && (cover[0].url || cover[0])))) || '';
+  const title = d.title || d.subjectName || 'Untitled';
+  const meta = [d.year, d.releaseYear, d.releaseDate, d.language, d.countryName, d.duration, d.imdbRatingValue && ('IMDb ' + d.imdbRatingValue)].filter(Boolean).join(' · ');
+  const desc = d.desc || d.introduction || d.description || 'No description available.';
+  const dubs = d.dubs || [];
+  const dubRow = dubs.length ? `<div class="dub-strip">${dubs.map(x => `<span class="dub-chip">${x.original ? '🌐' : '🎙️'} ${esc(x.lanName)}</span>`).join('')}</div>` : '';
+
+  const resLoaded = resList && resList.length;
+
+  let seasonSection = '';
+  if (state.isSeries && seasonList.length) {
+    const first = seasonList[0];
+    seasonSection = `
+      <div class="ep-section" id="epSection" style="display:block">
+        <h2>Seasons & Episodes</h2>
+        <div class="season-tabs" id="seasonTabs">
+          ${seasonList.map((x, i) => `<button class="season-tab ${i===0?'active':''}" onclick="pickSeason(${x.se ?? i})">${esc(x.title || x.seasonName || ('Season '+(x.se ?? i+1)))}</button>`).join('')}
+        </div>
+        <div class="ep-grid" id="epGrid"></div>
+      </div>`;
+  }
+
+  main.innerHTML = `
+    <div class="hero">
+      ${src ? `<div class="poster"><img src="${esc(src)}" alt="${esc(title)}" onerror="this.style.display='none'"/></div>` : ''}
+      <div class="content">
+        <h1>${esc(title)}</h1>
+        <div class="tags">
+          ${meta ? `<span class="tag">${esc(meta)}</span>` : ''}
+          <span class="tag">${state.isSeries ? 'Series' : 'Movie'}</span>
+        </div>
+        <div class="desc">${esc(desc)}</div>
+        ${dubRow}
+      </div>
+    </div>
+
+    <div class="player-section">
+      <h2>Watch Now</h2>
+      <div id="playerWrap">
+        <video id="player" controls playsinline></video>
+        <div class="control-bar">
+          <div class="control-group" id="languageGroup" style="display:none">
+            <span class="control-label">Language</span>
+            <button class="control-btn" id="languageBtn" onclick="toggleMenu('languageMenu')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <span id="languageBtnLabel">—</span>
+              <span style="opacity:.6">▼</span>
+            </button>
+            <div class="control-menu" id="languageMenu"></div>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="play-btn" id="playBtn" onclick="startPlayback()" ${resLoaded ? '' : ''}>▶ Play</button>
+        <button class="download-btn" id="dlBtn" onclick="doDownload()">⬇ Download</button>
+      </div>
+    </div>
+
+    ${seasonSection}
+  `;
+
+  renderLanguageMenu();
+  renderControlMenus();
+  if (state.isSeries && seasonList.length) pickSeason(seasonList[0].se ?? 0, false);
+  else if (!resLoaded) {
+    // no resources preloaded; enable manual fetch on Play
+    const btn = document.getElementById('playBtn');
+    btn.onclick = () => fetchResources(0, 0);
+    btn.textContent = '▶ Play (fetch stream)';
+    document.getElementById('dlBtn').disabled = true;
+  } else {
+    selectRes(bestResIndex(resList), false);
+  }
+}
+
+// ---------- In-player menus ----------
+function toggleMenu(menuId) {
+  document.querySelectorAll('.control-menu').forEach(m => {
+    if (m.id !== menuId) m.classList.remove('open');
+  });
+  document.getElementById(menuId).classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.control-group')) {
+    document.querySelectorAll('.control-menu').forEach(m => m.classList.remove('open'));
+  }
+});
+
+// Picks the highest-resolution stream automatically (no quality picker anymore)
+function bestResIndex(list) {
+  if (!list || !list.length) return 0;
+  let best = 0;
+  for (let i = 1; i < list.length; i++) {
+    const a = parseInt(list[i].resolution, 10) || 0;
+    const b = parseInt(list[best].resolution, 10) || 0;
+    if (a > b) best = i;
+  }
+  return best;
+}
+
+function renderControlMenus() {
+  const list = state.resList || [];
+  const lMenu = document.getElementById('languageMenu');
+  if (!lMenu) return;
+
+  if (!list.length) {
+    renderLanguageMenu();
+    updateButtons();
+    return;
+  }
+
+  state.curRes = bestResIndex(list);
+  renderLanguageMenu();
+  updateButtons();
+}
+
+function renderLanguageMenu() {
+  const dubs = state.dubLists || [];
+  const lMenu = document.getElementById('languageMenu');
+  const lBtn = document.getElementById('languageBtnLabel');
+  const group = document.getElementById('languageGroup');
+  if (!lMenu) return;
+  if (!dubs.length) {
+    if (group) group.style.display = 'none';
+    if (lBtn) lBtn.textContent = 'Original';
+    return;
+  }
+  // show the Language selector whenever an alternative dub exists, just like Quality
+  if (group) group.style.display = dubs.length > 1 ? 'inline-block' : 'none';
+  const curName = (dubs[state.curDub]?.lanName || 'Original').replace(/ dub$/, '');
+  if (lBtn) lBtn.textContent = curName || 'Original';
+  lMenu.innerHTML = dubs.map((dd, i) => {
+    const name = (dd.lanName || '').replace(/ dub$/, '') || 'Original';
+    const active = i === state.curDub;
+    const count = (dd.list || []).length;
+    return `<button class="menu-item ${active ? 'active' : ''}" onclick="selectLang(${i})">
+      <span class="${active ? 'check' : ''}">${active ? '✓' : '\u00A0\u00A0'}</span>
+      🌐 ${esc(name)}
+      <span class="item-meta">${count} option${count > 1 ? 's' : ''}</span>
+    </button>`;
+  }).join('');
+}
+
+function selectLang(idx) {
+  const dub = state.dubLists[idx];
+  if (!dub || !dub.list || !dub.list.length) return;
+  state.curDub = idx;
+  state.resList = dub.list;
+  state.curRes = bestResIndex(dub.list);
+  selectRes(state.curRes, true);
+  document.getElementById('languageMenu').classList.remove('open');
+  updateButtons();
+}
+
+function langKey(x) {
+  const raw = String(x.title || '');
+  const m = raw.match(/\[([^\[\]]+)\]/);
+  return m ? m[1].trim() : '';
+}
+
+function selectRes(i, autoplay) {
+  if (!state.resList || !state.resList[i]) return;
+  state.curRes = i;
+  const res = state.resList[i];
+  const url = res.resourceLink || res.url || res.link;
+  const player = document.getElementById('player');
+  if (player) {
+    player.src = '/stream?url=' + encodeURIComponent(url);
+    if (autoplay) player.play().catch(() => {});
+  }
+  updateButtons();
+}
+
+function dlLabel() {
+  return state.isSeries ? '⬇ Download Episode' : '⬇ Download';
+}
+
+function updateButtons() {
+  const list = state.resList || [];
+  const x = list[state.curRes];
+  const wrap = document.getElementById('playerWrap');
+  const dl = document.getElementById('dlBtn');
+  if (!x) { if (dl) { dl.disabled = true; dl.textContent = dlLabel(); } return; }
+  if (wrap) wrap.style.display = 'block';
+  // language label comes from the selected dub entry, not the resource title
+  const dubName = ((state.dubLists[state.curDub]?.lanName || langKey(x) || 'Original').replace(/ dub$/, '') || 'Original');
+  const lBtn = document.getElementById('languageBtnLabel');
+  if (lBtn) lBtn.textContent = dubName;
+  const title = state.detail?.title || 'movie';
+  const epSuffix = state.isSeries ? ` - S${state.se + 1}E${state.ep}` : '';
+  dl.dataset.url = encodeURIComponent(x.resourceLink || x.url || x.link);
+  dl.dataset.title = encodeURIComponent(title + epSuffix);
+  dl.disabled = false;
+  dl.textContent = dlLabel();
+}
+
+// ---------- Playback / resources ----------
+async function startPlayback() {
+  if (!state.resList || !state.resList.length) {
+    await fetchResources(state.se, state.ep || 0);
+    return;
+  }
+  selectRes(bestResIndex(state.resList), true);
+}
+
+async function fetchResources(se, ep) {
+  const btn = document.getElementById('playBtn');
+  btn.disabled = true; btn.textContent = '⏳ Fetching stream...';
+  try {
+    const data = await (await fetch(`/api/resources?subjectId=${SUBJECT_ID}&se=${se}&ep=${ep}`)).json();
+    if (data.error) throw new Error(data.error);
+    const list = data.data?.list || data.list || [];
+    if (!list.length) throw new Error('No streamable resource found.');
+    state.resList = list;
+    state.se = se; state.ep = ep;
+    state.curRes = bestResIndex(list);
+    btn.disabled = false; btn.textContent = '▶ Play';
+    selectRes(state.curRes, true);
+  } catch (e) {
+    btn.disabled = false; btn.textContent = '▶ Play';
+    alert('Could not fetch stream: ' + e.message);
+  }
+}
+
+function doDownload() {
+  const dl = document.getElementById('dlBtn');
+  if (!dl || dl.disabled) return;
+  dl.disabled = true; dl.textContent = '⏳ Preparing...';
+  const a = document.createElement('a');
+  a.href = `/download?url=${dl.dataset.url}&title=${dl.dataset.title}`;
+  a.click();
+  setTimeout(() => { dl.disabled = false; dl.textContent = dlLabel(); }, 2000);
+}
+
+// ---------- Episodes ----------
+async function refreshDubLists(se, ep) {
+  try {
+    const data = await (await fetch(`/api/resources_dubs?subjectId=${SUBJECT_ID}&se=${se}&ep=${ep}`)).json();
+    const dubs = (data?.dubs || []).filter(x => (x.list || []).length);
+    if (dubs.length) {
+      state.dubLists = dubs;
+      if (state.curDub >= dubs.length) state.curDub = 0;
+    }
+    renderLanguageMenu();
+  } catch (e) { /* keep previous dub lists */ }
+}
+
+function pickSeason(se, reloadEp = true) {
+  state.se = se;
+  const s = state.seasons.find(x => (x.se ?? -1) === se) || state.seasons[0];
+  document.querySelectorAll('.season-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.season-tab[onclick="pickSeason(${se}, false)"]`)?.classList.add('active');
+  const grid = document.getElementById('epGrid');
+  if (!grid) return;
+  const maxEp = s?.maxEp ?? 24;
+  const label = s?.title || s?.seasonName || ('S' + (se + 1));
+  grid.innerHTML = (reloadEp
+      ? `<button class="ep-btn active" onclick="loadEp(${se}, 0, '${esc(label)}')">S${se + 1} (All)</button>`
+      : '') +
+    Array.from({length: Math.min(maxEp, 100)}, (_, i) => i + 1)
+      .map(i => `<button class="ep-btn" onclick="loadEp(${se}, ${i}, '${esc(label)} E${i}')">E${i}</button>`).join('');
+  if (reloadEp) loadEp(se, 0, label);
+}
+
+async function loadEp(se, ep, label) {
+  if (ep > 0) {
+    document.querySelectorAll('#epGrid .ep-btn').forEach(b => b.classList.remove('active'));
+    event?.target?.classList?.add('active');
+  }
+  await fetchResources(se, ep);
+}
+
+window.refreshDubLists = refreshDubLists;
+
+boot();
+</script>
+</body>
+</html>

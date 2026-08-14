@@ -1,0 +1,17 @@
+﻿codecName = hevc
+duration = 1436
+ep = 1
+episode = 101
+extCaptions = []
+linkType = 2
+memberIcon = 
+postId = 7959253354897886608
+requireMemberType = 0
+resolution = 480
+resourceId = 1962703166789636680
+resourceLink = https://bcdn.hakunaymatata.com/resource/h265/d254ff94a7531bd00dce2631e0e1c490.mp4?sign=f8beade246dba5709d7d5fabb5d706ca&t=1786154381
+se = 1
+size = 69518394
+sourceUrl = https://www.fzmovies.cms/tv-Jujutsu Kaisen [Hindi]_1_1_1080P-.html/season-1/episode-1-r480P-264-h265
+title = 
+uploadBy = Faria Champagne
