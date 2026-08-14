@@ -518,25 +518,42 @@ if ('serviceWorker' in navigator) {
 }
 
 let isNavigating = false;
+let loadingTimer = null;
+
 function startLoading() {
   const bar = document.getElementById('topProgressBar');
-  if (bar) {
-    bar.style.opacity = '1';
-    bar.style.width = '28%';
-    setTimeout(() => { if (bar && isNavigating) bar.style.width = '78%'; }, 120);
-  }
+  if (!bar) return;
+  clearTimeout(loadingTimer);
+  bar.style.opacity = '1';
+  bar.style.width = '25%';
+  
+  loadingTimer = setTimeout(() => {
+    bar.style.width = '65%';
+    loadingTimer = setTimeout(() => {
+      bar.style.width = '85%';
+      // Safety auto-finish after 3.5s so it NEVER remains stuck
+      loadingTimer = setTimeout(() => {
+        finishLoading();
+      }, 3500);
+    }, 300);
+  }, 120);
 }
 
 function finishLoading() {
   isNavigating = false;
+  clearTimeout(loadingTimer);
   const bar = document.getElementById('topProgressBar');
   if (bar) {
     bar.style.width = '100%';
     setTimeout(() => {
       bar.style.opacity = '0';
       setTimeout(() => { bar.style.width = '0%'; }, 250);
-    }, 180);
+    }, 150);
   }
+  document.querySelectorAll('.loading-pulse').forEach(el => {
+    el.classList.remove('loading-pulse');
+    el.style.pointerEvents = '';
+  });
 }
 
 function navigateTo(url, clickedEl) {
@@ -549,8 +566,10 @@ function navigateTo(url, clickedEl) {
   setTimeout(() => { location.href = url; }, 60);
 }
 
+window.addEventListener('pageshow', () => finishLoading());
+window.addEventListener('DOMContentLoaded', () => finishLoading());
+window.addEventListener('load', () => finishLoading());
 window.addEventListener('beforeunload', () => {
-  isNavigating = true;
   startLoading();
 });
 

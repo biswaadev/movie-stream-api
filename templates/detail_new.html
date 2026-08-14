@@ -567,7 +567,7 @@
 
       <!-- Quick Download Row -->
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);">
-        <button onclick="downloadCurrentStream()" style="background:none;border:none;color:#1e90ff;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+        <button id="playModalDlBtn" onclick="downloadCurrentStream()" style="background:none;border:none;color:#1e90ff;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Direct Download (<span id="playFileSizeLabel">—</span>)
         </button>
@@ -651,25 +651,42 @@ if ('serviceWorker' in navigator) {
 }
 
 let isNavigating = false;
+let loadingTimer = null;
+
 function startLoading() {
   const bar = document.getElementById('topProgressBar');
-  if (bar) {
-    bar.style.opacity = '1';
-    bar.style.width = '28%';
-    setTimeout(() => { if (bar && isNavigating) bar.style.width = '78%'; }, 120);
-  }
+  if (!bar) return;
+  clearTimeout(loadingTimer);
+  bar.style.opacity = '1';
+  bar.style.width = '25%';
+  
+  loadingTimer = setTimeout(() => {
+    bar.style.width = '65%';
+    loadingTimer = setTimeout(() => {
+      bar.style.width = '85%';
+      // Safety auto-finish after 3.5s so it NEVER remains stuck
+      loadingTimer = setTimeout(() => {
+        finishLoading();
+      }, 3500);
+    }, 300);
+  }, 120);
 }
 
 function finishLoading() {
   isNavigating = false;
+  clearTimeout(loadingTimer);
   const bar = document.getElementById('topProgressBar');
   if (bar) {
     bar.style.width = '100%';
     setTimeout(() => {
       bar.style.opacity = '0';
       setTimeout(() => { bar.style.width = '0%'; }, 250);
-    }, 180);
+    }, 150);
   }
+  document.querySelectorAll('.loading-pulse').forEach(el => {
+    el.classList.remove('loading-pulse');
+    el.style.pointerEvents = '';
+  });
 }
 
 function navigateTo(url, clickedEl) {
@@ -682,8 +699,10 @@ function navigateTo(url, clickedEl) {
   setTimeout(() => { location.href = url; }, 60);
 }
 
+window.addEventListener('pageshow', () => finishLoading());
+window.addEventListener('DOMContentLoaded', () => finishLoading());
+window.addEventListener('load', () => finishLoading());
 window.addEventListener('beforeunload', () => {
-  isNavigating = true;
   startLoading();
 });
 
@@ -1374,7 +1393,9 @@ async function copyCurrentStreamLink() {
   }
 }
 
-function downloadCurrentStream() {
+let isDirectDlBusy = false;
+async function downloadCurrentStream() {
+  if (isDirectDlBusy) return;
   const raw = getSelectedPlayRaw();
   if (!raw) return;
   const token = getStreamToken(raw);
@@ -1383,7 +1404,25 @@ function downloadCurrentStream() {
   const e = currentEp();
   const qual = $("playQualitySelect")?.value || "HD";
   const title = (m?.title || "video") + (m?.isSeries ? ` S${state.season+1}E${(e?.num || (state.ep+1))}` : "") + ` (${qual})`;
-  location.href = `/download/v/${token}.mp4?title=${encodeURIComponent(title)}`;
+  const dlUrl = `/download/v/${token}.mp4?title=${encodeURIComponent(title)}`;
+
+  isDirectDlBusy = true;
+  const btn = $("playModalDlBtn");
+  toast("⏳ Preparing download link (10s timer started)...");
+
+  for (let s = 10; s > 0; s--) {
+    if (btn) {
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Preparing (${s}s)...`;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  triggerBrowserDownload(dlUrl);
+  toast(`✓ Download started for ${title}!`);
+  isDirectDlBusy = false;
+  if (btn) {
+    btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Direct Download (<span id="playFileSizeLabel">—</span>)`;
+  }
 }
 
 
@@ -1635,7 +1674,7 @@ async function renderDownloadEpisodes() {
             </div>
           </div>
         </label>
-        <button onclick="downloadSingleFile(${item.index})" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .15s;display:inline-flex;align-items:center;gap:4px;" onmouseover="this.style.background='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">
+        <button id="dlSingleBtn_${item.index}" onclick="downloadSingleFile(${item.index})" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .15s;display:inline-flex;align-items:center;gap:4px;" onmouseover="this.style.background='var(--accent)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span>Download</span>
         </button>
@@ -1715,17 +1754,35 @@ async function downloadSingleFile(idx) {
   const item = dlEpData[idx];
   if (!item) return;
 
+  const btn = document.getElementById(`dlSingleBtn_${idx}`);
+  if (btn) btn.disabled = true;
+
   const chosenQual = $("dlQualitySelect")?.value || "720p";
   const chosenDub = $("dlDubSelect")?.value || "";
 
-  toast(`Fetching link for ${item.title}...`);
-  let rawUrl = item.url;
-  if (state.model.isSeries || !rawUrl) {
-    rawUrl = await getEpisodeDownloadUrl(item.se, item.epNum, chosenQual, chosenDub);
+  toast(`⏳ Preparing download link for ${item.title} (10s timer started)...`);
+
+  // Pre-fetch link in background during countdown
+  const fetchPromise = (async () => {
+    let rawUrl = item.url;
+    if (state.model.isSeries || !rawUrl) {
+      rawUrl = await getEpisodeDownloadUrl(item.se, item.epNum, chosenQual, chosenDub);
+    }
+    return rawUrl;
+  })();
+
+  for (let s = 10; s > 0; s--) {
+    if (btn) btn.innerHTML = `⏳ ${s}s`;
+    await new Promise(r => setTimeout(r, 1000));
   }
 
+  const rawUrl = await fetchPromise;
   if (!rawUrl) {
     toast("No download link found for this episode");
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download</span>`;
+    }
     return;
   }
 
@@ -1733,6 +1790,11 @@ async function downloadSingleFile(idx) {
   const dlUrl = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
   triggerBrowserDownload(dlUrl);
   toast(`✓ Downloading ${item.title}...`);
+
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download</span>`;
+  }
 }
 
 async function downloadSelectedBatch() {
@@ -1740,27 +1802,36 @@ async function downloadSelectedBatch() {
   if (!selected.length) return;
 
   const batchBtn = $("dlBatchBtn");
-  if (batchBtn) {
-    batchBtn.disabled = true;
-    batchBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Starting All (${selected.length})...`;
-  }
+  if (batchBtn) batchBtn.disabled = true;
 
   const chosenQual = $("dlQualitySelect")?.value || "720p";
   const chosenDub = $("dlDubSelect")?.value || "";
 
-  toast(`Starting instant download for all ${selected.length} files...`);
+  toast(`⏳ Preparing & warming ${selected.length} download links (10s timer started)...`);
+
+  // 1. Concurrently pre-fetch all episode stream links in parallel with Promise.all
+  const fetchPromise = Promise.all(selected.map(async (item) => {
+    let rawUrl = item.url;
+    if (state.model.isSeries || !rawUrl) {
+      rawUrl = await getEpisodeDownloadUrl(item.se, item.epNum, chosenQual, chosenDub);
+    }
+    return { item, rawUrl };
+  }));
+
+  // 2. Visual 10-second countdown on batch button
+  for (let s = 10; s > 0; s--) {
+    if (batchBtn) {
+      batchBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Preparing ${selected.length} files (${s}s)...`;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+
+  if (batchBtn) {
+    batchBtn.innerHTML = `⚡ Starting Downloads...`;
+  }
 
   try {
-    // 1. Concurrently fetch all episode stream links in parallel with Promise.all
-    const resolvedTasks = await Promise.all(selected.map(async (item) => {
-      let rawUrl = item.url;
-      if (state.model.isSeries || !rawUrl) {
-        rawUrl = await getEpisodeDownloadUrl(item.se, item.epNum, chosenQual, chosenDub);
-      }
-      return { item, rawUrl };
-    }));
-
-    // 2. Immediately trigger all downloads at the exact same moment
+    const resolvedTasks = await fetchPromise;
     let startedCount = 0;
     resolvedTasks.forEach(({ item, rawUrl }) => {
       if (rawUrl) {
