@@ -25,8 +25,8 @@ import tracker
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "moviebox-admin-secret-key-2026")
 
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "biswajittanti185@gmail.com")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "BISWA@9090")
 
 
 def admin_required(f):
@@ -49,9 +49,10 @@ def admin_page():
 
 @app.route("/admin/login", methods=["POST"])
 def admin_login():
-    user = request.form.get("username", "").strip()
+    user = request.form.get("username", "").strip().lower()
     pwd = request.form.get("password", "").strip()
-    if user == ADMIN_USERNAME and pwd == ADMIN_PASSWORD:
+    valid_users = [ADMIN_USERNAME.lower(), "biswajittanti185@gmail.com", "admin"]
+    if user in valid_users and pwd == ADMIN_PASSWORD:
         session["admin_auth"] = True
         return redirect("/admin")
     return render_template("admin.html", is_logged_in=False, error="Invalid admin username or password.")
