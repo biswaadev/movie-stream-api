@@ -446,50 +446,124 @@ def stream_transcode():
 
 
 # ---------------------------------------------------------------------------
-# ServiceWorker — intercepts direct CDN video requests, injects User-Agent
-# This bypasses the Flask proxy entirely for instant low-latency playback
+# HLS (HTTP Live Streaming) Endpoints — Guaranteed universal playback on all browsers
+# ---------------------------------------------------------------------------
+import urllib.parse
+
+@app.route("/api/hls/playlist.m3u8")
+def hls_playlist():
+    """Dynamic HLS playlist generator with fast 6s MPEG-TS segments."""
+    url = request.args.get("url", "")
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        return jsonify({"error": "Invalid URL"}), 400
+
+    dur_str = request.args.get("dur", "7200")
+    try:
+        dur = float(dur_str)
+        if dur <= 0:
+            dur = 7200.0
+    except ValueError:
+        dur = 7200.0
+
+    segment_dur = 6.0
+    num_segments = max(1, int(dur // segment_dur))
+    if (dur % segment_dur) > 1.0:
+        num_segments += 1
+
+    lines = [
+        "#EXTM3U",
+        "#EXT-X-VERSION:3",
+        f"#EXT-X-TARGETDURATION:{int(segment_dur) + 1}",
+        "#EXT-X-MEDIA-SEQUENCE:0",
+        "#EXT-X-PLAYLIST-TYPE:VOD",
+    ]
+    encoded_url = urllib.parse.quote(url, safe='')
+    for i in range(num_segments):
+        ss = i * segment_dur
+        seg_len = segment_dur if (i < num_segments - 1) else max(1.0, dur - ss)
+        lines.append(f"#EXTINF:{seg_len:.2f},")
+        lines.append(f"/api/hls/segment.ts?url={encoded_url}&ss={ss:.2f}&seg_dur={seg_len:.2f}")
+
+    lines.append("#EXT-X-ENDLIST")
+    resp = Response("\n".join(lines), status=200, content_type="application/vnd.apple.mpegurl")
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
+@app.route("/api/hls/segment.ts")
+def hls_segment():
+    """Generates an individual 6-second MPEG-TS video segment on the fly with FFmpeg."""
+    url = request.args.get("url", "")
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        return jsonify({"error": "Invalid URL"}), 400
+
+    ss = request.args.get("ss", "0")
+    seg_dur = request.args.get("seg_dur", request.args.get("t", "6"))
+    try:
+        ss_val = float(ss)
+        dur_val = float(seg_dur)
+    except ValueError:
+        ss_val, dur_val = 0.0, 6.0
+
+    headers_str = f"User-Agent: {api.ANDROID_USER_AGENT}\r\n"
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel", "error",
+        "-reconnect", "1",
+        "-reconnect_at_eof", "1",
+        "-reconnect_streamed", "1",
+        "-reconnect_delay_max", "5",
+        "-headers", headers_str,
+        "-ss", str(ss_val),
+        "-i", url,
+        "-t", str(dur_val),
+        "-map", "0:v:0",
+        "-map", "0:a:0?",
+        "-map_metadata", "-1",
+        "-map_chapters", "-1",
+        "-sn",
+        "-dn",
+        "-c:v", "libx264",
+        "-profile:v", "baseline",
+        "-level", "3.0",
+        "-preset", "ultrafast",
+        "-tune", "zerolatency",
+        "-threads", "0",
+        "-pix_fmt", "yuv420p",
+        "-crf", "28",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-f", "mpegts",
+        "pipe:1"
+    ]
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, timeout=20)
+        if proc.returncode != 0:
+            return jsonify({"error": "FFmpeg failed"}), 500
+
+        resp = Response(proc.stdout, status=200, content_type="video/MP2T")
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Cache-Control"] = "public, max-age=3600"
+        return resp
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# ServiceWorker — auto-unregister legacy service worker
 # ---------------------------------------------------------------------------
 @app.route("/sw.js")
 def service_worker():
-    js = f"""
-const ANDROID_UA = {json.dumps(api.ANDROID_USER_AGENT)};
-
-self.addEventListener('install', event => self.skipWaiting());
-self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
-
-// Intercept ALL requests to hakunaymatata.com and aoneroom CDN
-// This lets us inject the required Android User-Agent header
-// so video streams directly from CDN to user with zero server hop
-self.addEventListener('fetch', event => {{
-    const urlStr = event.request.url;
-    const isCdn = urlStr.includes('hakunaymatata.com') || urlStr.includes('aoneroom');
-
-    if (isCdn) {{
-        event.respondWith((async () => {{
-            try {{
-                const reqHeaders = new Headers();
-                // Forward Range header for seek/partial content support
-                const rangeHeader = event.request.headers.get('Range');
-                if (rangeHeader) reqHeaders.set('Range', rangeHeader);
-                reqHeaders.set('User-Agent', ANDROID_UA);
-                reqHeaders.set('Referer', 'https://www.moviebox.ng/');
-                reqHeaders.set('Origin', 'https://www.moviebox.ng');
-
-                const cdnResp = await fetch(urlStr, {{
-                    method: event.request.method,
-                    headers: reqHeaders,
-                    mode: 'cors',
-                    credentials: 'omit'
-                }});
-                if (cdnResp.ok || cdnResp.status === 206) return cdnResp;
-            }} catch (e) {{
-                // SW fetch failed - fallback to server proxy
-            }}
-            return fetch(event.request);
-        }})());
-    }}
-}});
+    js = """
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => {
+    event.waitUntil(self.registration.unregister().then(() => self.clients.claim()));
+});
 """
+    return Response(js, content_type="application/javascript", headers={"Service-Worker-Allowed": "/"})
     return Response(js, content_type="application/javascript", headers={"Service-Worker-Allowed": "/"})
 
 

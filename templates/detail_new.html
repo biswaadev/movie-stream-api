@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Watch — Flask MovieBox</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 <style>
   :root {
     --bg: #0f0f0f;
@@ -571,7 +572,9 @@
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    for (const r of regs) r.unregister();
+  }).catch(() => {});
 }
 
 const SUBJECT_ID = {{ subject_id | default("null", true) | tojson }};
@@ -955,7 +958,6 @@ function setQuality(i) {
   if (label === "1080p") state.quality = "1080p";
   else if (label === "720p") state.quality = "720p";
   else if (label === "480p") state.quality = "480p";
-  else if (label === "360p") state.quality = "360p";
   renderMenus();
   applyStream(true);
   toast("Quality: " + label);
@@ -964,6 +966,9 @@ function setQuality(i) {
 function getDur() {
   return (state.totalDur && state.totalDur > 0) ? state.totalDur : (video.duration || 0);
 }
+
+let currentHls = null;
+let watchLogged = false;
 
 function applyStream(autoplay) {
   const raw = currentRaw();
@@ -975,34 +980,72 @@ function applyStream(autoplay) {
   watchLogged = false; // Reset 5-second watch tracking
   const rawDur = parseInt(raw.duration, 10);
   const modelDur = (parseInt(state.model?.durMinutes, 10) || 0) * 60;
-  state.totalDur = rawDur || modelDur || 0;
+  state.totalDur = rawDur || modelDur || 7200;
 
   const rawUrl = rawUrlOf(raw);
-  const hevc = isHevcRes(raw);
-  const target = hevc
-    ? ("/stream_transcode?url=" + encodeURIComponent(rawUrl))
-    : ("/stream?url=" + encodeURIComponent(rawUrl));
-  if (target === video.getAttribute("data-src")) { if (autoplay && state.playing) video.play().catch(() => {}); return; }
-  video.setAttribute("data-src", target);
-  video.src = target;
-  video.load(); // Force immediate background pre-buffering
-  checkResumeProgress();
+  const hlsUrl = '/api/hls/playlist.m3u8?url=' + encodeURIComponent(rawUrl) + '&dur=' + state.totalDur;
 
-  if (autoplay) {
-    state.playing = true;
-    updatePlayUI();
-    const p = video.play();
-    if (p !== undefined) {
-      p.catch(() => {
-        // Fallback for mobile browsers that require muted autoplay
-        video.muted = true;
-        syncVol();
-        video.play().catch(() => {});
-      });
-    }
-  } else if (wasPlaying) {
-    video.addEventListener("loadedmetadata", () => { video.currentTime = t; video.play().catch(() => {}); }, { once: true });
+  if (currentHls) {
+    currentHls.destroy();
+    currentHls = null;
   }
+
+  $("bufferingSpinner").style.display = "flex";
+
+  if (window.Hls && Hls.isSupported()) {
+    const hls = new Hls({
+      maxBufferLength: 30,
+      maxMaxBufferLength: 60,
+      enableWorker: true,
+      lowLatencyMode: true
+    });
+    currentHls = hls;
+    hls.loadSource(hlsUrl);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      $("bufferingSpinner").style.display = "none";
+      if (autoplay) {
+        state.playing = true;
+        updatePlayUI();
+        const p = video.play();
+        if (p !== undefined) {
+          p.catch(() => {
+            video.muted = true;
+            syncVol();
+            video.play().catch(() => {});
+          });
+        }
+      } else if (wasPlaying) {
+        video.currentTime = t;
+        video.play().catch(() => {});
+      }
+    });
+    hls.on(Hls.Events.ERROR, (event, data) => {
+      if (data.fatal) {
+        switch (data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            hls.startLoad();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            hls.recoverMediaError();
+            break;
+          default:
+            hls.destroy();
+            video.src = '/stream?url=' + encodeURIComponent(rawUrl);
+            video.play().catch(() => {});
+            break;
+        }
+      }
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = hlsUrl;
+    if (autoplay) video.play().catch(() => {});
+  } else {
+    video.src = '/stream?url=' + encodeURIComponent(rawUrl);
+    if (autoplay) video.play().catch(() => {});
+  }
+
+  checkResumeProgress();
 }
 
 /* ---------- Subtitles & Captions ---------- */
@@ -1282,16 +1325,8 @@ function checkResumeProgress() {
     $("resumeTime").textContent = fmtTime(time);
     bar.style.display = "flex";
     $("resumeBtn").onclick = () => {
-      const raw = currentRaw();
-      if (raw && isHevcRes(raw)) {
-        state.seekOffset = Math.floor(time);
-        const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw)) + "&ss=" + state.seekOffset;
-        video.setAttribute("data-src", target);
-        video.src = target;
-      } else {
-        state.seekOffset = 0;
-        video.currentTime = time;
-      }
+      state.seekOffset = 0;
+      video.currentTime = time;
       bar.style.display = "none";
       video.play().catch(() => {});
       toast("Resumed from " + fmtTime(time));
@@ -1347,20 +1382,10 @@ function seekAt(clientX) {
   const targetTime = pct * dur;
 
   video.removeAttribute("poster");
-  $("bufferingSpinner").style.display = "flex";
-
-  const raw = currentRaw();
-  if (raw && isHevcRes(raw)) {
-    state.seekOffset = Math.floor(targetTime);
-    const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw)) + "&ss=" + state.seekOffset;
-    video.setAttribute("data-src", target);
-    video.src = target;
+  state.seekOffset = 0;
+  if (dur && !isNaN(targetTime)) {
+    video.currentTime = targetTime;
     video.play().catch(() => {});
-  } else {
-    state.seekOffset = 0;
-    if (dur && !isNaN(targetTime)) {
-      video.currentTime = targetTime;
-    }
   }
 }
 progress.addEventListener("pointerdown", e => {
