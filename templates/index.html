@@ -8,28 +8,30 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --bg: #0d0f14;
-    --surface: #171a22;
-    --surface2: #222631;
-    --accent: #e50914;
-    --accent-hover: #f40612;
-    --text: #f5f5f7;
-    --muted: #9aa0ad;
-    --radius: 12px;
+    --bg: #0b0d14;
+    --surface: #171a25;
+    --surface2: #212536;
+    --accent: #ff2a7a;
+    --accent-hover: #ff5092;
+    --sakura-pink: #ff75a0;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --border: rgba(255, 105, 180, 0.16);
+    --radius: 14px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Inter', sans-serif;
-    background: var(--bg);
+    background: radial-gradient(circle at 50% 0%, rgba(255, 42, 122, 0.08) 0%, transparent 50%), var(--bg);
     color: var(--text);
     min-height: 100vh;
   }
   /* Header */
   header {
     position: sticky; top: 0; z-index: 50;
-    background: rgba(13,15,20,0.92);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(11,13,20,0.92);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
     padding: 14px 24px;
     display: flex; align-items: center; gap: 18px;
   }
@@ -37,6 +39,7 @@
     font-weight: 800; font-size: 20px; letter-spacing: -0.5px;
     color: var(--accent);
     white-space: nowrap;
+    text-shadow: 0 0 16px rgba(255,42,122,0.5);
   }
   .logo span { color: var(--text); }
   .search-wrap {
@@ -45,40 +48,41 @@
   #searchInput {
     flex: 1; min-width: 0;
     background: var(--surface2);
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
     color: var(--text);
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 12px 16px;
     font-size: 15px;
     outline: none;
-    transition: border-color .15s;
+    transition: all .18s;
   }
-  #searchInput:focus { border-color: var(--accent); }
+  #searchInput:focus { border-color: var(--accent); box-shadow: 0 0 14px rgba(255,42,122,0.25); }
   .filter {
     background: var(--surface2);
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
     color: var(--text);
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 12px 14px;
     font-size: 14px;
     cursor: pointer;
   }
   #searchBtn {
-    background: var(--accent);
+    background: linear-gradient(135deg, #ff2a7a 0%, #ff6da0 100%);
     color: white;
     border: none;
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 12px 22px;
-    font-weight: 600;
+    font-weight: 700;
     font-size: 14px;
     cursor: pointer;
-    transition: background .15s;
+    box-shadow: 0 4px 16px rgba(255,42,122,0.4);
+    transition: all .18s;
   }
-  #searchBtn:hover { background: var(--accent-hover); }
+  #searchBtn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255,42,122,0.6); }
   /* Main */
   main { padding: 28px 24px 60px; }
   .section-title {
-    font-size: 22px; font-weight: 700; margin-bottom: 18px;
+    font-size: 22px; font-weight: 800; margin-bottom: 18px; letter-spacing: -0.3px;
   }
   .grid {
     display: flex;
@@ -87,16 +91,16 @@
   }
   .card {
     background: var(--surface);
-    border-radius: 12px;
+    border-radius: 16px;
     overflow: hidden;
     cursor: pointer;
-    transition: transform .18s, box-shadow .18s, border-color .18s;
-    border: 1px solid rgba(255,255,255,0.07);
+    transition: transform .2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow .2s, border-color .2s;
+    border: 1.5px solid var(--border);
     display: flex; flex-direction: row;
     align-items: stretch;
     min-height: 165px;
   }
-  .card:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0,0,0,0.5); border-color: rgba(229,9,20,0.5); }
+  .card:hover { transform: translateY(-3px) scale(1.008); box-shadow: 0 12px 30px rgba(0,0,0,0.6), 0 0 20px rgba(255,42,122,0.25); border-color: var(--accent); }
   .card .poster {
     width: 120px; min-width: 120px;
     background: var(--surface2);

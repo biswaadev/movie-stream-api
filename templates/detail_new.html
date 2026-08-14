@@ -6,55 +6,59 @@
 <title>Watch — Flask MovieBox</title>
 <style>
   :root {
-    --bg: #0f0f0f;
-    --bg2: #1a1a1a;
-    --surface: #242424;
-    --surface2: #2e2e2e;
-    --text: #e0e0e0;
-    --muted: #9b9b9b;
-    --accent: #e50914;
-    --accent-hover: #f40612;
-    --border: rgba(255,255,255,0.08);
-    --radius: 12px;
+    --bg: #0b0d14;
+    --bg2: #141724;
+    --surface: #191c2b;
+    --surface2: #222638;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --accent: #ff2a7a;
+    --accent-hover: #ff5092;
+    --sakura-pink: #ff75a0;
+    --sakura-glow: rgba(255, 42, 122, 0.45);
+    --anime-cyan: #38bdf8;
+    --anime-purple: #c084fc;
+    --border: rgba(255, 105, 180, 0.18);
+    --radius: 14px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+    background: radial-gradient(circle at 50% 0%, rgba(255, 42, 122, 0.08) 0%, transparent 60%), linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
     color: var(--text);
     min-height: 100vh;
   }
   ::-webkit-scrollbar { height: 8px; width: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 8px; }
-  ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+  ::-webkit-scrollbar-thumb { background: rgba(255, 105, 180, 0.25); border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 105, 180, 0.45); }
 
   header {
     position: sticky; top: 0; z-index: 100;
-    background: rgba(15,15,15,0.85);
-    backdrop-filter: blur(12px);
+    background: rgba(11, 13, 20, 0.88);
+    backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border);
     padding: 14px 28px;
     display: flex; align-items: center; gap: 18px;
   }
-  .logo { font-weight: 800; font-size: 20px; color: var(--accent); cursor: pointer; letter-spacing: -0.5px; }
-  .logo span { color: var(--text); }
-  .back-link { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600; }
-  .back-link:hover { color: var(--text); }
+  .logo { font-weight: 800; font-size: 20px; color: var(--accent); cursor: pointer; letter-spacing: -0.5px; text-shadow: 0 0 16px rgba(255,42,122,0.6); }
+  .logo span { color: #fff; }
+  .back-link { color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600; transition: color .15s; }
+  .back-link:hover { color: var(--sakura-pink); }
 
   /* ---------- Hero ---------- */
   .hero { position: relative; overflow: hidden; padding: 34px 28px 10px; }
   .hero-bg {
     position: absolute; inset: -40px;
     background: #222 center/cover no-repeat;
-    filter: blur(22px) brightness(0.35);
+    filter: blur(24px) brightness(0.35);
     transform: scale(1.15);
     z-index: 0;
   }
   .hero-bg::after {
     content: ""; position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(15,15,15,0.35) 0%, rgba(15,15,15,0.7) 60%, var(--bg) 100%);
+    background: linear-gradient(180deg, rgba(11,13,20,0.3) 0%, rgba(11,13,20,0.7) 60%, var(--bg) 100%);
   }
   .hero-inner { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 10px 0; }
 
@@ -70,22 +74,23 @@
     width: 220px;
     min-width: 220px;
     height: 330px;
-    border-radius: 14px;
+    border-radius: 18px;
     overflow: hidden;
     cursor: pointer;
     background: var(--surface2);
-    box-shadow: 0 16px 40px rgba(0,0,0,0.7);
-    border: 1px solid rgba(255,255,255,0.12);
-    transition: transform .2s, box-shadow .2s;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.8), 0 0 35px rgba(255, 42, 122, 0.22);
+    border: 1.5px solid rgba(255, 105, 180, 0.28);
+    transition: transform .25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow .25s;
   }
   .hero-poster-box:hover {
-    transform: scale(1.03);
-    box-shadow: 0 20px 50px rgba(229,9,20,0.3);
+    transform: translateY(-4px) scale(1.03);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.85), 0 0 45px rgba(255, 42, 122, 0.45);
+    border-color: #ff5388;
   }
   .hero-play-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(0,0,0,0.4);
+    background: rgba(11,13,20,0.4);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -93,21 +98,22 @@
     transition: background .2s;
   }
   .hero-poster-box:hover .hero-play-overlay {
-    background: rgba(0,0,0,0.2);
+    background: rgba(11,13,20,0.2);
   }
   .hero-play-circle {
-    width: 58px;
-    height: 58px;
+    width: 62px;
+    height: 62px;
     border-radius: 50%;
-    background: rgba(229,9,20,0.95);
+    background: linear-gradient(135deg, #ff2a7a 0%, #ff75a0 100%);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 20px rgba(229,9,20,0.5);
-    transition: transform .2s;
+    box-shadow: 0 8px 24px rgba(255, 42, 122, 0.65), 0 0 14px rgba(255, 255, 255, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    transition: transform .2s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   .hero-poster-box:hover .hero-play-circle {
-    transform: scale(1.12);
+    transform: scale(1.15);
   }
   .hero-info-col {
     flex: 1;
@@ -154,50 +160,98 @@
   .meta-panel { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; }
   .meta-panel h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 800; letter-spacing: -0.5px; }
   .meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 14px; }
-  .rating { color: #ffc107; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 5px; }
+  .rating { color: #facc15; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 5px; }
   .chip {
-    background: var(--surface); border: 1px solid var(--border);
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
     color: var(--muted); font-size: 12px; font-weight: 600;
     padding: 4px 12px; border-radius: 999px;
   }
   .genres { display: flex; flex-wrap: wrap; gap: 8px; }
   .genre {
-    background: rgba(229,9,20,0.12); color: #ff7a81;
-    border: 1px solid rgba(229,9,20,0.35);
-    font-size: 12px; font-weight: 700; letter-spacing: 0.4px;
+    background: rgba(255, 42, 122, 0.14); color: #ff9ec6;
+    border: 1px solid rgba(255, 42, 122, 0.35);
+    font-size: 11px; font-weight: 800; letter-spacing: 0.5px;
     padding: 5px 14px; border-radius: 999px;
     text-transform: uppercase;
   }
   .meta-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; }
   .act-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    border-radius: 10px; padding: 12px 24px;
-    font-size: 14px; font-weight: 700; cursor: pointer;
-    border: none; min-height: 46px; transition: transform .12s, background .12s;
-    box-sizing: border-box;
+    border-radius: 14px; padding: 12px 24px;
+    font-size: 14px; font-weight: 800; letter-spacing: 0.3px; cursor: pointer;
+    border: none; min-height: 48px; transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-sizing: border-box; backdrop-filter: blur(10px);
   }
-  .act-btn:hover { transform: translateY(-1px); }
-  .act-btn.watchlist { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-  .act-btn.watchlist:hover { border-color: var(--accent); }
-  .act-btn.watchlist.on { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .act-btn.share { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-  .act-btn.share:hover { border-color: #1f80e0; color: #6cb3f7; }
+  .act-btn:hover { transform: translateY(-2px) scale(1.03); }
+  .act-btn.play-app {
+    background: linear-gradient(135deg, #ff2a7a 0%, #ff5e95 50%, #d8005b 100%) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 25px rgba(255, 42, 122, 0.55), 0 0 12px rgba(255, 110, 162, 0.35) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.35) !important;
+  }
+  .act-btn.play-app:hover {
+    box-shadow: 0 12px 32px rgba(255, 42, 122, 0.75), 0 0 20px rgba(255, 110, 162, 0.6) !important;
+  }
+  .act-btn.download {
+    background: rgba(192, 132, 252, 0.12) !important;
+    border: 1.5px solid rgba(192, 132, 252, 0.45) !important;
+    color: #f3e8ff !important;
+    box-shadow: 0 4px 18px rgba(192, 132, 252, 0.2) !important;
+  }
+  .act-btn.download:hover {
+    background: rgba(192, 132, 252, 0.25) !important;
+    border-color: #d8b4fe !important;
+    color: #fff !important;
+    box-shadow: 0 6px 24px rgba(192, 132, 252, 0.45) !important;
+  }
+  .act-btn.watchlist {
+    background: rgba(255, 117, 160, 0.08); color: #ffd1e1;
+    border: 1.5px solid rgba(255, 117, 160, 0.25);
+  }
+  .act-btn.watchlist:hover {
+    border-color: #ff5388; color: #fff;
+    background: rgba(255, 117, 160, 0.22);
+    box-shadow: 0 4px 18px rgba(255, 83, 136, 0.35);
+  }
+  .act-btn.watchlist.on {
+    background: linear-gradient(135deg, #ff2a7a, #ff6da0); color: #fff;
+    border-color: #ffb8d2;
+    box-shadow: 0 4px 20px rgba(255, 42, 122, 0.6);
+  }
+  .act-btn.share {
+    background: rgba(56, 189, 248, 0.08); color: #bae6fd;
+    border: 1.5px solid rgba(56, 189, 248, 0.25);
+  }
+  .act-btn.share:hover {
+    border-color: #38bdf8; color: #fff;
+    background: rgba(56, 189, 248, 0.22);
+    box-shadow: 0 4px 18px rgba(56, 189, 248, 0.35);
+  }
 
   /* ---------- Sections ---------- */
-  main { max-width: 1120px; margin: 0 auto; padding: 30px 28px 60px; }
-  section { margin-top: 44px; }
+  main { max-width: 1120px; margin: 0 auto; padding: 24px 28px 60px; }
+  section { margin-top: 36px; }
   section[hidden] { display: none !important; }
   .sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-  .sec-head h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+  .sec-head h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; color: #fff; display: flex; align-items: center; gap: 8px; }
   .season-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
   .season-tab {
-    background: var(--surface); border: 1px solid var(--border);
-    color: var(--text); border-radius: 8px;
-    padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
-    transition: background .12s, border-color .12s;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1.5px solid rgba(255, 105, 180, 0.2);
+    color: #f3e8ff; border-radius: 20px;
+    padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
-  .season-tab:hover { border-color: var(--accent); }
-  .season-tab.active { background: var(--accent); border-color: var(--accent); }
+  .season-tab:hover {
+    border-color: #ff5388;
+    background: rgba(255, 77, 136, 0.15);
+    transform: translateY(-1px);
+  }
+  .season-tab.active {
+    background: linear-gradient(135deg, #ff2a7a, #ff6ea2);
+    border-color: #ffb8d2; color: #fff;
+    box-shadow: 0 4px 16px rgba(255, 42, 122, 0.55);
+  }
 
   .ep-grid {
     display: flex;
@@ -206,7 +260,7 @@
     margin-top: 14px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 4px 2px 8px;
+    padding: 6px 2px 10px;
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -216,33 +270,67 @@
     display: none;
   }
   .ep-box {
-    flex: 0 0 52px;
-    width: 52px;
-    height: 52px;
-    background: var(--surface2);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 12px;
+    flex: 0 0 58px;
+    width: 58px;
+    height: 58px;
+    background: rgba(25, 28, 40, 0.75);
+    border: 1.5px solid rgba(255, 105, 180, 0.22);
+    border-radius: 16px;
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: 15px;
-    font-weight: 800;
     color: #fff;
     cursor: pointer;
-    transition: all .15s ease;
+    transition: all .22s cubic-bezier(0.34, 1.56, 0.64, 1);
     user-select: none;
     flex-shrink: 0;
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .ep-box::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .ep-tag {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    color: #ff75a0;
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+  .ep-num {
+    font-size: 17px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1;
   }
   .ep-box:hover {
-    background: rgba(229, 9, 20, 0.3);
-    border-color: var(--accent);
-    transform: scale(1.08);
+    background: rgba(255, 51, 119, 0.18);
+    border-color: #ff75a0;
+    transform: translateY(-4px) scale(1.08);
+    box-shadow: 0 8px 24px rgba(255, 51, 119, 0.45);
   }
   .ep-box.active {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: linear-gradient(135deg, #ff2a7a 0%, #ff6da0 100%);
+    border-color: #ffb8d2;
     color: #fff;
-    box-shadow: 0 0 16px rgba(229, 9, 20, 0.85);
+    transform: translateY(-3px) scale(1.08);
+    box-shadow: 0 0 24px rgba(255, 42, 122, 0.85), 0 6px 16px rgba(0, 0, 0, 0.5);
+  }
+  .ep-box.active .ep-tag {
+    color: #fff;
+    opacity: 0.95;
+  }
+  .ep-box.active .ep-num {
+    color: #fff;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.35);
   }
 
   .synopsis { color: var(--muted); font-size: 14px; line-height: 1.75; max-width: 860px; }
@@ -820,7 +908,10 @@ function renderEpisodes() {
   $("epGrid").innerHTML = eps.map((e, i) => {
     const epNum = e.num || (i + 1);
     const titleAttr = esc(e.name ? `Episode ${epNum}: ${e.name}` : `Episode ${epNum}`);
-    return `<button class="ep-box ${i === state.ep ? "active" : ""}" onclick="onEpisodeClick(${i})" title="${titleAttr}">${epNum}</button>`;
+    return `<button class="ep-box ${i === state.ep ? "active" : ""}" onclick="onEpisodeClick(${i})" title="${titleAttr}">
+      <span class="ep-tag">EP</span>
+      <span class="ep-num">${epNum}</span>
+    </button>`;
   }).join("");
 
   const activeBtn = $("epGrid").querySelector(".ep-box.active");
