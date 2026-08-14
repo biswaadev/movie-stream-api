@@ -986,7 +986,10 @@ function applyStream(autoplay) {
   state.totalDur = rawDur || modelDur || 0;
 
   const rawUrl = rawUrlOf(raw);
-  const target = "/stream?url=" + encodeURIComponent(rawUrl);
+  const hevc = isHevcRes(raw);
+  const target = hevc
+    ? ("/stream_transcode?url=" + encodeURIComponent(rawUrl))
+    : ("/stream?url=" + encodeURIComponent(rawUrl));
   if (target === video.getAttribute("data-src")) { if (autoplay && state.playing) video.play().catch(() => {}); return; }
   video.setAttribute("data-src", target);
   video.src = target;
@@ -1264,8 +1267,16 @@ function checkResumeProgress() {
     $("resumeTime").textContent = fmtTime(time);
     bar.style.display = "flex";
     $("resumeBtn").onclick = () => {
-      state.seekOffset = 0;
-      video.currentTime = time;
+      const raw = currentRaw();
+      if (raw && isHevcRes(raw)) {
+        state.seekOffset = Math.floor(time);
+        const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw)) + "&ss=" + state.seekOffset;
+        video.setAttribute("data-src", target);
+        video.src = target;
+      } else {
+        state.seekOffset = 0;
+        video.currentTime = time;
+      }
       bar.style.display = "none";
       video.play().catch(() => {});
       toast("Resumed from " + fmtTime(time));
@@ -1323,9 +1334,18 @@ function seekAt(clientX) {
   video.removeAttribute("poster");
   $("bufferingSpinner").style.display = "flex";
 
-  state.seekOffset = 0;
-  if (dur && !isNaN(targetTime)) {
-    video.currentTime = targetTime;
+  const raw = currentRaw();
+  if (raw && isHevcRes(raw)) {
+    state.seekOffset = Math.floor(targetTime);
+    const target = "/stream_transcode?url=" + encodeURIComponent(rawUrlOf(raw)) + "&ss=" + state.seekOffset;
+    video.setAttribute("data-src", target);
+    video.src = target;
+    video.play().catch(() => {});
+  } else {
+    state.seekOffset = 0;
+    if (dur && !isNaN(targetTime)) {
+      video.currentTime = targetTime;
+    }
   }
 }
 progress.addEventListener("pointerdown", e => {
