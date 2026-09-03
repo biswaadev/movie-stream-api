@@ -183,11 +183,90 @@ Authorization: Bearer {token}
 * **Path:** `/wefeed-mobile-bff/subject-api/get`
 * **Query Params:**
   * `subjectId`: `1654274595068805784`
-* **Response Contains:**
-  * `title`, `description`, `duration`, `genres`, `releaseDate`
-  * `dubs`: Array of audio dubs (e.g. Hindi, Tamil, Telugu, English) with their unique `subjectId`
-  * `actors` & `directors`: Cast & Crew with photos and IDs
-  * `seasons`: Array of seasons for TV series
+* **Response Sample (Avatar Example):**
+  ```json
+  {
+    "code": 0,
+    "message": "success",
+    "data": {
+      "subjectId": "1654274595068805784",
+      "title": "Avatar [Hindi]",
+      "postTitle": "Avatar",
+      "contentRating": "PG-13",
+      "releaseDate": "2009-12-18",
+      "durationSeconds": 9720,
+      "description": "A paraplegic Marine dispatched to the moon Pandora on a unique mission becomes torn between following his orders and protecting the world he feels is his home.",
+      "cover": {
+        "url": "https://pbcdn.aoneroom.com/image/2026/01/27/d0afc52be1b6f93d5c9a70f9105f3a37.jpg",
+        "width": 640,
+        "height": 960
+      },
+      "stills": {
+        "url": "https://pbcdn.aoneroom.com/image/2023/03/23/92f5465c28dfb684904e3bda68038194.jpg",
+        "width": 1024,
+        "height": 428
+      },
+      "dubs": [
+        {
+          "subjectId": "8906247916759695608",
+          "lanName": "Original Audio",
+          "lanCode": "en",
+          "original": true
+        },
+        {
+          "subjectId": "1654274595068805784",
+          "lanName": "Hindi dub",
+          "lanCode": "hi",
+          "original": false
+        },
+        {
+          "subjectId": "3387445081316775448",
+          "lanName": "Tamil dub",
+          "lanCode": "ta",
+          "original": false
+        },
+        {
+          "subjectId": "5331311270480462024",
+          "lanName": "Telugu dub",
+          "lanCode": "te",
+          "original": false
+        },
+        {
+          "subjectId": "2115849262339607256",
+          "lanName": "ptbr dub",
+          "lanCode": "ptbr",
+          "original": false
+        }
+      ],
+      "staffList": [
+        {
+          "staffId": "6788255266560690664",
+          "name": "James Cameron",
+          "character": "Director / Writer",
+          "avatarUrl": "https://pbcdn.aoneroom.com/image/2022/11/15/cdb17ee9325004c3f10d07645bba5eee.jpg"
+        },
+        {
+          "staffId": "3994348652033481080",
+          "name": "Sam Worthington",
+          "character": "Jake Sully",
+          "avatarUrl": "https://pbcdn.aoneroom.com/image/2022/09/02/1f75434211ac1a206c2f6166ba7a89fd.jpg"
+        },
+        {
+          "staffId": "7901170757754605944",
+          "name": "Zoe Saldana",
+          "character": "Neytiri",
+          "avatarUrl": "https://pbcdn.aoneroom.com/image/2022/09/02/242ceae290dd9d08ccee8d3327616429.jpg"
+        },
+        {
+          "staffId": "1624273347639135912",
+          "name": "Sigourney Weaver",
+          "character": "Dr. Grace Augustine",
+          "avatarUrl": "https://pbcdn.aoneroom.com/image/2022/09/02/6fce31d65dc1f2aba788445bd1b72371.jpg"
+        }
+      ]
+    }
+  }
+  ```
 
 ---
 
