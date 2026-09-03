@@ -1536,16 +1536,21 @@ function getStreamToken(raw) {
   return encodeStreamToken(rawUrl);
 }
 
-function getAbsoluteStreamUrl() {
+function getAbsoluteStreamUrl(playerType = 'auto') {
   const raw = getSelectedPlayRaw();
   if (!raw) return "";
   const token = getStreamToken(raw);
   if (!token) return "";
+  const isDash = !!(raw.dashUrl || (raw.resourceLink && (raw.resourceLink.includes('.mpd') || raw.resourceLink.includes('__signCookie__'))));
+  if (playerType === 'vlc' && isDash) {
+    return `${window.location.origin}/dash/${token}/index.mpd`;
+  }
   return `${window.location.origin}/stream/v/${token}.mp4`;
 }
 
 function launchExternalPlayer(type) {
-  const streamUrl = getAbsoluteStreamUrl();
+  const isVlc = (type === 'vlc');
+  const streamUrl = getAbsoluteStreamUrl(isVlc ? 'vlc' : 'auto');
   if (!streamUrl) {
     toast("Please wait, loading stream link...");
     return;
@@ -1562,7 +1567,7 @@ function launchExternalPlayer(type) {
     // 2. Direct VLC Protocol Launch
     window.location.href = `vlc://${streamUrl}`;
 
-    toast("✓ Opening VLC Player & Link copied to clipboard");
+    toast("✓ Opening VLC Player & Full Timeline Link copied");
     return;
   }
 
@@ -1602,15 +1607,21 @@ function launchExternalPlayer(type) {
   }
 }
 
-async function copyCurrentStreamLink() {
-  const streamUrl = getAbsoluteStreamUrl();
+async function copyCurrentStreamLink(preferDash = true) {
+  const raw = getSelectedPlayRaw();
+  const token = getStreamToken(raw);
+  const isDash = !!(raw && (raw.dashUrl || (raw.resourceLink && (raw.resourceLink.includes('.mpd') || raw.resourceLink.includes('__signCookie__')))));
+  const streamUrl = (preferDash && isDash && token) 
+    ? `${window.location.origin}/dash/${token}/index.mpd` 
+    : getAbsoluteStreamUrl();
+
   if (!streamUrl) {
     toast("No stream URL available");
     return;
   }
   try {
     await navigator.clipboard.writeText(streamUrl);
-    toast("✓ Stream URL copied! In VLC press Ctrl+N and Enter");
+    toast("✓ Full Timeline VLC Link copied! In VLC press Ctrl+N and Enter");
   } catch {
     prompt("Copy this stream URL:", streamUrl);
   }
