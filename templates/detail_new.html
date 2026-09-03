@@ -1542,7 +1542,7 @@ function getAbsoluteStreamUrl(playerType = 'auto') {
   const token = getStreamToken(raw);
   if (!token) return "";
   const isDash = !!(raw.dashUrl || (raw.resourceLink && (raw.resourceLink.includes('.mpd') || raw.resourceLink.includes('__signCookie__'))));
-  if (playerType === 'vlc' && isDash) {
+  if (isDash) {
     return `${window.location.origin}/dash/${token}/index.mpd`;
   }
   return `${window.location.origin}/stream/v/${token}.mp4`;

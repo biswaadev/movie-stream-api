@@ -24,6 +24,7 @@ from flask import (
 )
 import json
 import os
+import re
 import shutil
 import subprocess
 import urllib.parse
@@ -576,7 +577,19 @@ def dash_manifest(token):
     url = decode_stream_token(token)
     if not url:
         return jsonify({"error": "Invalid token"}), 400
-    raw_mpd, sign_cookie, _ = parse_dash_url(url)
+    raw_mpd, sign_cookie, rep = parse_dash_url(url)
+
+    # Parse CloudFront signed cookie components
+    parts = {}
+    for item in sign_cookie.split(";"):
+        item = item.strip()
+        if "=" in item:
+            k, v = item.split("=", 1)
+            parts[k] = v
+    policy = parts.get("CloudFront-Policy", "")
+    sig = parts.get("CloudFront-Signature", "")
+    kpid = parts.get("CloudFront-Key-Pair-Id", "")
+
     headers = {
         "User-Agent": "ExoPlayerLib/2.19.1",
         "Cookie": sign_cookie,
@@ -584,7 +597,21 @@ def dash_manifest(token):
     }
     try:
         r = api._session.get(raw_mpd, headers=headers, timeout=15)
-        resp = Response(r.text, status=r.status_code, content_type="application/dash+xml")
+        raw_text = r.text
+        # Inject direct signed CDN parameters so client streams 100% directly from CloudFront (0 server bandwidth)
+        if policy and sig and kpid:
+            base_dash = raw_mpd.rsplit("/", 1)[0]
+            qs = f"Policy={policy}&amp;Signature={sig}&amp;Key-Pair-Id={kpid}"
+            raw_text = raw_text.replace(
+                'initialization="init-stream$RepresentationID$.m4s"',
+                f'initialization="{base_dash}/init-stream$RepresentationID$.m4s?{qs}"'
+            )
+            raw_text = raw_text.replace(
+                'media="chunk-stream$RepresentationID$-$Number%05d$.m4s"',
+                f'media="{base_dash}/chunk-stream$RepresentationID$-$Number%05d$.m4s?{qs}"'
+            )
+
+        resp = Response(raw_text, status=r.status_code, content_type="application/dash+xml")
         resp.headers["Access-Control-Allow-Origin"] = "*"
         return resp
     except Exception as e:
