@@ -14,6 +14,7 @@ import time
 import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import re
 
 import requests
 
@@ -261,50 +262,152 @@ def season_info(subject_id):
     return res
 
 
+def extract_base_dash_url(cookie):
+    """Extract CDN base URL from CloudFront signed cookie."""
+    if not cookie or "CloudFront-Policy=" not in cookie:
+        return None
+    try:
+        policy = cookie.split("CloudFront-Policy=")[1].split(";")[0]
+        policy_padded = policy + "=" * (-len(policy) % 4)
+        raw_bytes = base64.urlsafe_b64decode(policy_padded)
+        raw_str = raw_bytes.decode("utf-8", errors="ignore")
+        clean_json = raw_str[:raw_str.rfind("}") + 1]
+        data = json.loads(clean_json)
+        res_pattern = data["Statement"][0]["Resource"]
+        return res_pattern.replace("/*", "")
+    except Exception:
+        match = re.search(r"(https://[^\s\"\'\;]+)/\*", cookie)
+        if match:
+            return match.group(1)
+        return None
+
+
+def get_play_info(subject_id, se=0, ep=0):
+    """Fetch official DASH streams via /wefeed-mobile-bff/subject-api/play-info.
+    This bypasses the deprecated /subject-api/resource dummy video clips ('update the app').
+    """
+    try:
+        res = signed_request(
+            "GET",
+            "/wefeed-mobile-bff/subject-api/play-info",
+            params={"subjectId": str(subject_id), "se": str(se), "ep": str(ep)},
+        )
+        data = res.get("data", res) or {}
+        streams = data.get("streams", [])
+        out = []
+        for s in streams:
+            cookie = s.get("signCookie") or ""
+            resolutions_str = str(s.get("resolutions") or "1080")
+            size = int(s.get("size") or 0)
+            duration = int(s.get("duration") or 0)
+            codec = s.get("codecName") or "hevc"
+
+            if cookie and "CloudFront-Policy=" in cookie:
+                base_dash_url = extract_base_dash_url(cookie)
+                if base_dash_url:
+                    mpd_url = f"{base_dash_url}/index.mpd"
+                    res_list = [r.strip() for r in resolutions_str.split(",") if r.strip()]
+                    if not res_list:
+                        res_list = ["1080"]
+
+                    cookie_enc = urllib.parse.quote(cookie)
+                    for rep_idx, r_val in enumerate(res_list):
+                        try:
+                            r_int = int(r_val)
+                        except ValueError:
+                            r_int = 1080
+
+                        scaled_size = size
+                        if len(res_list) > 1:
+                            if r_int <= 480:
+                                scaled_size = int(size * 0.3)
+                            elif r_int <= 720:
+                                scaled_size = int(size * 0.55)
+
+                        combined_link = f"{mpd_url}?rep={rep_idx}&__signCookie__={cookie_enc}"
+                        out.append({
+                            "resolution": r_int,
+                            "codecName": codec,
+                            "size": scaled_size,
+                            "duration": duration,
+                            "resourceLink": combined_link,
+                            "dashUrl": mpd_url,
+                            "signCookie": cookie,
+                            "rep": rep_idx,
+                            "se": int(se),
+                            "ep": int(ep),
+                            "title": f"{r_int}P",
+                            "uploadBy": "Official HD",
+                        })
+            else:
+                url = s.get("url") or ""
+                # Strictly filter out the dummy 'update the app' video clip
+                if url and "9a0461bc39da389663bf3dbb17091d3f" not in url and "/other/2026/09/01/" not in url:
+                    out.append({
+                        "resolution": int(resolutions_str.split(",")[0]) if resolutions_str.split(",")[0].isdigit() else 720,
+                        "codecName": codec,
+                        "size": size,
+                        "duration": duration,
+                        "resourceLink": url,
+                        "se": int(se),
+                        "ep": int(ep),
+                        "title": f"{resolutions_str}P",
+                        "uploadBy": "Direct MP4",
+                    })
+        return out
+    except Exception:
+        return []
+
+
 def get_resources(subject_id, se=0, ep=0):
     """Return resources for the given subject, season and episode.
-    Fetches all pages and resolution passes in parallel and merges locally.
-    If the requested subjectId returns only audio-only (`tran-audio`) tracks,
-    it automatically falls back to fetching the original title's video stream
-    so the video player receives a valid video track.
+    First resolves modern DASH streams with signed CloudFront cookies from play-info.
+    If empty, gracefully falls back to other dubs or legacy passes (excluding dummy clips).
     """
-    key = str(subject_id)
+    key = f"{subject_id}_{se}_{ep}"
     hit = _get_cached(_resources_cache, key, _resources_cache_ttl)
     if hit:
-        full = hit
-    else:
-        full = _fetch_all_resources(subject_id)
-        _set_cached(_resources_cache, key, full)
+        return {"data": {"list": hit}, "pager": {"totalCount": len(hit)}}
 
-    se_i, ep_i = int(se), int(ep)
-    if se_i == 0 and ep_i == 0:
-        filtered = full
-    else:
-        filtered = [x for x in full
-                    if int(x.get("se", -1)) == se_i and int(x.get("ep", -1)) == ep_i]
+    streams = get_play_info(subject_id, se=se, ep=ep)
 
-    # Check if all filtered streams are audio-only (tran-audio)
-    has_video = any('/tran-audio/' not in str(x.get("resourceLink", "")) for x in filtered)
-    if not has_video and filtered:
+    # If this dub ID returned no playable video, check if other dubs have video
+    if not streams:
         try:
             detail = subject_detail(subject_id)
             d = detail.get("data", detail)
             dubs = d.get("dubs", [])
-            orig_dub = next((x for x in dubs if x.get("original")), None)
-            if orig_dub and str(orig_dub.get("subjectId")) != str(subject_id):
-                orig_res = get_resources(orig_dub.get("subjectId"), se=se, ep=ep)
-                orig_list = orig_res.get("data", {}).get("list", [])
-                video_items = [x for x in orig_list if '/tran-audio/' not in str(x.get("resourceLink", ""))]
-                if video_items:
-                    filtered = video_items + filtered
+            for dub in dubs:
+                dub_id = dub.get("subjectId")
+                if dub_id and str(dub_id) != str(subject_id):
+                    streams = get_play_info(dub_id, se=se, ep=ep)
+                    if streams:
+                        break
         except Exception:
             pass
 
-    return {"data": {"list": filtered}, "pager": {"totalCount": len(filtered)}}
+    # If still no streams, try legacy resource fetch as absolute fallback (filtering fake clips)
+    if not streams:
+        legacy_full = _fetch_all_resources(subject_id, max_pages=5)
+        se_i, ep_i = int(se), int(ep)
+        if se_i == 0 and ep_i == 0:
+            filtered = legacy_full
+        else:
+            filtered = [x for x in legacy_full
+                        if int(x.get("se", -1)) == se_i and int(x.get("ep", -1)) == ep_i]
+        # Strictly exclude the 9a0461bc39da389663bf3dbb17091d3f "update the app" dummy clip
+        streams = [
+            x for x in filtered
+            if "9a0461bc39da389663bf3dbb17091d3f" not in str(x.get("resourceLink", ""))
+            and "/other/2026/09/01/" not in str(x.get("resourceLink", ""))
+        ]
+
+    _set_cached(_resources_cache, key, streams)
+    return {"data": {"list": streams}, "pager": {"totalCount": len(streams)}}
 
 
-def _fetch_all_resources(subject_id, max_pages=40):
-    """Parallel fetch of resource list across all resolution passes."""
+def _fetch_all_resources(subject_id, max_pages=5):
+    """Parallel fetch of resource list across all resolution passes (excluding fake clips)."""
     merged = []
     seen = set()
     lock = threading.Lock()
@@ -322,7 +425,10 @@ def _fetch_all_resources(subject_id, max_pages=40):
                     break
                 added = False
                 for x in lst:
-                    rid = x.get("resourceId") or x.get("postId") or x.get("resourceLink")
+                    rlink = str(x.get("resourceLink") or "")
+                    if "9a0461bc39da389663bf3dbb17091d3f" in rlink or "/other/2026/09/01/" in rlink:
+                        continue
+                    rid = x.get("resourceId") or x.get("postId") or rlink
                     with lock:
                         if rid and rid in seen:
                             continue
@@ -346,6 +452,7 @@ def _fetch_all_resources(subject_id, max_pages=40):
                 pass
 
     return merged
+
 
 
 def trending():

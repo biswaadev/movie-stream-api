@@ -6,6 +6,12 @@ CDN User-Agent block. Streams are served natively (HEVC/H.264); no
 server-side transcoding.
 """
 
+try:
+    from gevent import monkey
+    monkey.patch_all()
+except Exception:
+    pass
+
 from flask import (
     Flask,
     jsonify,
@@ -18,6 +24,9 @@ from flask import (
 )
 import json
 import os
+import shutil
+import subprocess
+import urllib.parse
 from functools import wraps
 import movie_api as api
 import tracker
@@ -347,6 +356,19 @@ def image_proxy():
         return jsonify({"error": str(e)}), 500
 
 
+def is_dash_url(url: str) -> bool:
+    return bool(url and (".mpd" in url or "__signCookie__" in url))
+
+
+def parse_dash_url(url: str):
+    parsed = urllib.parse.urlparse(url)
+    qs = urllib.parse.parse_qs(parsed.query)
+    cookie = qs.get("__signCookie__", [""])[0]
+    rep = qs.get("rep", ["0"])[0]
+    raw_mpd = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    return raw_mpd, cookie, rep
+
+
 @app.route("/download")
 @app.route("/download/v/<path:token>")
 def download(token=None):
@@ -361,6 +383,54 @@ def download(token=None):
     # Track download event
     ip = tracker.get_client_ip(request)
     tracker.log_activity(ip, "DOWNLOAD", media_title=title, details=f"filename={filename}", user_agent=request.headers.get("User-Agent", ""))
+
+    if is_dash_url(url):
+        raw_mpd, sign_cookie, rep = parse_dash_url(url)
+        if shutil.which("ffmpeg"):
+            headers_str = (
+                f"User-Agent: ExoPlayerLib/2.19.1\r\n"
+                f"Cookie: {sign_cookie}\r\n"
+                f"Referer: https://www.movieboxpro.app/\r\n"
+            )
+            cmd = [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel", "error",
+                "-headers", headers_str,
+                "-i", raw_mpd,
+                "-map", f"0:v:{rep}",
+                "-map", "0:a:0?",
+                "-c", "copy",
+                "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+                "-f", "mp4",
+                "pipe:1",
+            ]
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=64 * 1024)
+
+            def generate_mp4():
+                try:
+                    while True:
+                        chunk = proc.stdout.read(64 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+                except GeneratorExit:
+                    pass
+                finally:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+
+            forwarded = Response(
+                generate_mp4(),
+                status=200,
+                content_type="video/mp4",
+            )
+            forwarded.headers["Content-Disposition"] = f'attachment; filename="{filename}.mp4"'
+            forwarded.headers["Access-Control-Allow-Origin"] = "*"
+            forwarded.headers["Accept-Ranges"] = "bytes"
+            return forwarded
 
     headers = {"User-Agent": api.ANDROID_USER_AGENT}
     resp = api._session.get(url, headers=headers, stream=True, timeout=20)
@@ -383,9 +453,6 @@ def trending():
         return jsonify({"error": str(e)}), 500
 
 
-import shutil
-import subprocess
-
 # ---------------------------------------------------------------------------
 # CDN video proxy — mandatory Android UA + Range forwarding + Token Decryption
 # ---------------------------------------------------------------------------
@@ -396,6 +463,67 @@ def stream(token=None):
     url = decode_stream_token(raw_token)
     if not url or not (url.startswith("http://") or url.startswith("https://")):
         return jsonify({"error": "Invalid or expired stream URL"}), 400
+
+    if is_dash_url(url):
+        raw_mpd, sign_cookie, rep = parse_dash_url(url)
+        if shutil.which("ffmpeg"):
+            headers_str = (
+                f"User-Agent: ExoPlayerLib/2.19.1\r\n"
+                f"Cookie: {sign_cookie}\r\n"
+                f"Referer: https://www.movieboxpro.app/\r\n"
+            )
+            cmd = [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel", "error",
+                "-headers", headers_str,
+            ]
+            ss = request.args.get("ss", "0").strip()
+            try:
+                ss_val = float(ss)
+                if ss_val > 0:
+                    cmd.extend(["-ss", str(ss_val)])
+            except ValueError:
+                pass
+
+            cmd.extend([
+                "-i", raw_mpd,
+                "-map", f"0:v:{rep}",
+                "-map", "0:a:0?",
+                "-c", "copy",
+                "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+                "-f", "mp4",
+                "pipe:1",
+            ])
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=64 * 1024)
+
+            def generate_stream():
+                try:
+                    while True:
+                        chunk = proc.stdout.read(64 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+                except GeneratorExit:
+                    pass
+                finally:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+
+            forwarded = Response(
+                generate_stream(),
+                status=200,
+                content_type="video/mp4",
+            )
+            forwarded.headers["Access-Control-Allow-Origin"] = "*"
+            forwarded.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
+            forwarded.headers["Access-Control-Allow-Headers"] = "Range, User-Agent"
+            forwarded.headers["Accept-Ranges"] = "bytes"
+            return forwarded
+        else:
+            return redirect(f"/dash/{raw_token}/index.mpd")
 
     range_header = request.headers.get("Range")
     client_ip = request.headers.get("CF-Connecting-IP") or request.headers.get("X-Forwarded-For") or request.remote_addr
@@ -441,6 +569,48 @@ def stream(token=None):
     forwarded.headers["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
     forwarded.headers["Access-Control-Allow-Headers"] = "Range, User-Agent"
     return forwarded
+
+
+@app.route("/dash/<path:token>/index.mpd")
+def dash_manifest(token):
+    url = decode_stream_token(token)
+    if not url:
+        return jsonify({"error": "Invalid token"}), 400
+    raw_mpd, sign_cookie, _ = parse_dash_url(url)
+    headers = {
+        "User-Agent": "ExoPlayerLib/2.19.1",
+        "Cookie": sign_cookie,
+        "Referer": "https://www.movieboxpro.app/",
+    }
+    try:
+        r = api._session.get(raw_mpd, headers=headers, timeout=15)
+        resp = Response(r.text, status=r.status_code, content_type="application/dash+xml")
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/dash/<path:token>/<segment>")
+def dash_segment(token, segment):
+    url = decode_stream_token(token)
+    if not url:
+        return jsonify({"error": "Invalid token"}), 400
+    raw_mpd, sign_cookie, _ = parse_dash_url(url)
+    base_dash = raw_mpd.rsplit("/", 1)[0]
+    seg_url = f"{base_dash}/{segment}"
+    headers = {
+        "User-Agent": "ExoPlayerLib/2.19.1",
+        "Cookie": sign_cookie,
+        "Referer": "https://www.movieboxpro.app/",
+    }
+    try:
+        r = api._session.get(seg_url, headers=headers, stream=True, timeout=15)
+        resp = Response(r.iter_content(chunk_size=128 * 1024), status=r.status_code, content_type="video/iso.segment")
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
 
 
 @app.route("/stream_transcode")
