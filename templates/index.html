@@ -811,7 +811,7 @@ function renderContinueWatching() {
     return `
       <div class="cw-card" onclick="navigateTo('${playUrl}', this)">
         <div class="cw-thumb">
-          <img src="${esc(optImg)}" loading="lazy" alt="${esc(item.title)}" onerror="this.onerror=null;this.src='${esc(item.img)}';" />
+          <img src="${esc(optImg)}" loading="lazy" alt="${esc(item.title)}" onerror="this.onerror=null;this.style.opacity=0.35;" />
           <div style="position:absolute;inset:0;background:rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;">
             <div style="width:34px;height:34px;border-radius:50%;background:rgba(229,9,20,0.9);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.5);">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff" style="margin-left:2px"><path d="M8 5v14l11-7z"/></svg>
@@ -844,15 +844,23 @@ document.addEventListener('visibilitychange', () => {
 });
 renderContinueWatching();
 
+function encodeStreamToken(str) {
+  if (!str) return "";
+  const salt = "mb_stream_v2_salt_2026";
+  let enc = "";
+  for (let i = 0; i < str.length; i++) {
+    enc += String.fromCharCode(str.charCodeAt(i) ^ salt.charCodeAt(i % salt.length));
+  }
+  return btoa(enc).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 function optimizeImgUrl(url, w = 160, q = 60) {
   if (!url || typeof url !== 'string') return '';
-  if (url.includes('aoneroom.com') || url.includes('hakunaymatata.com')) {
-    if (!url.includes('x-oss-process')) {
-      const sep = url.includes('?') ? '&' : '?';
-      return url + sep + `x-oss-process=image/resize,w_${w}/format,webp/quality,q_${q}`;
-    }
-  }
-  return url;
+  if (url.startsWith('/img/v/') || url.startsWith('/api/image_proxy') || url.startsWith('/static/')) return url;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return url;
+  const token = encodeStreamToken(url);
+  if (!token) return '';
+  return `/img/v/${token}.webp?w=${w}&q=${q}`;
 }
 
 function renderSearchSkeleton(count = 6) {
@@ -955,7 +963,7 @@ function renderHomeFeed(data) {
       return `
         <div class="carousel-card" onclick="navigateTo('/watch/${id}', this)">
           <div class="thumb-wrap">
-            <img src="${esc(optSrc)}" loading="lazy" alt="${t}" onerror="this.onerror=null;this.src='${esc(cover)}';" />
+            <img src="${esc(optSrc)}" loading="lazy" alt="${t}" onerror="this.onerror=null;this.style.opacity=0.35;" />
             ${dub}
           </div>
           <div class="info">
@@ -1137,7 +1145,7 @@ function cardHTML(item) {
   const cover = item.cover || item.imageList || item.images || item.image || [];
   const rawSrc = (cover && (cover.url || (Array.isArray(cover) && cover[0] && (cover[0].url || cover[0])))) || '';
   const optSrc = optimizeImgUrl(rawSrc, 160, 60);
-  if (optSrc) poster = `<img src="${esc(optSrc)}" loading="lazy" alt="${esc(title)}" onerror="this.onerror=null;this.src='${esc(rawSrc)}';" />`;
+  if (optSrc) poster = `<img src="${esc(optSrc)}" loading="lazy" alt="${esc(title)}" onerror="this.onerror=null;this.style.opacity=0.35;" />`;
 
   const starIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="#f5c518" style="vertical-align:-1px;margin-right:3px"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`;
   const micIcon = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/></svg>`;

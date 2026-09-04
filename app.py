@@ -27,6 +27,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import urllib.parse
 from functools import wraps
 import movie_api as api
@@ -165,48 +166,9 @@ def detail_demo():
 # ---------------------------------------------------------------------------
 # API proxy routes (called by the frontend via fetch())
 # ---------------------------------------------------------------------------
-@app.route("/api/search")
-def search():
-    keyword = request.args.get("q", "").strip()
-    page = int(request.args.get("page", 1))
-    per_page = int(request.args.get("per_page", 20))
-    subject_type = int(request.args.get("type", 0))
-    if not keyword:
-        return jsonify({"error": "Empty search keyword"}), 400
-    try:
-        ip = tracker.get_client_ip(request)
-        tracker.log_activity(ip, "SEARCH", details=f"q={keyword}", user_agent=request.headers.get("User-Agent", ""))
-        data = api.search(keyword, page=page, per_page=per_page, subject_type=subject_type)
-        return jsonify(data)
-    except Exception as e:  # noqa
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/suggest")
-def suggest():
-    keyword = request.args.get("q", "").strip()
-    try:
-        return jsonify(api.search_suggest(keyword))
-    except Exception as e:  # noqa
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/detail/<subject_id>")
-def detail(subject_id):
-    try:
-        return jsonify(api.subject_detail(subject_id))
-    except Exception as e:  # noqa
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/seasons/<subject_id>")
-def seasons(subject_id):
-    try:
-        return jsonify(api.season_info(subject_id))
-    except Exception as e:  # noqa
-        return jsonify({"error": str(e)}), 500
-
-
+# ---------------------------------------------------------------------------
+# Stream & Resource Token Encryption, Proxy & Response Sanitizer
+# ---------------------------------------------------------------------------
 import base64
 from concurrent.futures import ThreadPoolExecutor
 
@@ -231,9 +193,14 @@ def decode_stream_token(token: str) -> str:
     token = token.strip()
     if token.startswith("http://") or token.startswith("https://"):
         return token
+    m = re.search(r'/(?:stream/v|dash|download/v|img/v|sub/v)/([^/?#.]+)', token)
+    if m:
+        token = m.group(1)
     try:
-        if token.endswith(".mp4"):
-            token = token[:-4]
+        for ext in (".mp4", ".m4s", ".jpg", ".jpeg", ".png", ".webp", ".vtt", ".mpd"):
+            if token.endswith(ext):
+                token = token[:-len(ext)]
+                break
         pad = len(token) % 4
         if pad:
             token += "=" * (4 - pad)
@@ -247,6 +214,210 @@ def decode_stream_token(token: str) -> str:
     except Exception:
         return ""
 
+def is_dash_url(url: str) -> bool:
+    return bool(url and (".mpd" in url or "__signCookie__" in url))
+
+def parse_dash_url(url: str):
+    parsed = urllib.parse.urlparse(url)
+    qs = urllib.parse.parse_qs(parsed.query)
+    cookie = qs.get("__signCookie__", [""])[0]
+    rep = qs.get("rep", ["0"])[0]
+    raw_mpd = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    return raw_mpd, cookie, rep
+
+def sanitize_data(data):
+    """Recursively scrub all raw CDN and upstream URLs/cookies, replacing with opaque tokens."""
+    if isinstance(data, dict):
+        out = {}
+        # If this dict represents a video stream resource
+        if "resourceLink" in data or "dashUrl" in data:
+            raw_stream = data.get("resourceLink") or data.get("dashUrl") or data.get("url") or ""
+            if raw_stream and isinstance(raw_stream, str) and raw_stream.startswith("http"):
+                if data.get("signCookie") and "__signCookie__" not in raw_stream:
+                    sep = "&" if "?" in raw_stream else "?"
+                    raw_stream += f"{sep}__signCookie__={urllib.parse.quote(data['signCookie'])}"
+                tok = encode_stream_token(raw_stream)
+                is_dash = is_dash_url(raw_stream)
+                s_url = f"/dash/{tok}/index.mpd" if is_dash else f"/stream/v/{tok}.mp4"
+                out["token"] = tok
+                out["isDash"] = is_dash
+                out["streamUrl"] = s_url
+                if "resourceLink" in data:
+                    out["resourceLink"] = s_url
+                if "dashUrl" in data:
+                    out["dashUrl"] = s_url
+                if "tran-audio" in raw_stream:
+                    out["isTranAudio"] = True
+
+        for k, v in data.items():
+            if k in ("signCookie", "cookie", "raw", "resourceLink", "dashUrl"):
+                continue
+            if k in ("detailUrl", "playUrl") and isinstance(v, str) and any(d in v for d in ("movie-box", "aoneroom", "hakunaymatata")):
+                continue
+            if k in ("subPath", "captionUrl") and isinstance(v, str) and v.startswith("http"):
+                tok = encode_stream_token(v)
+                out[k] = f"/sub/v/{tok}.vtt"
+                continue
+            if k in ("url", "img", "cover", "avatar", "icon", "poster") and isinstance(v, str) and v.startswith("http"):
+                tok = encode_stream_token(v)
+                if any(ext in v.lower() for ext in (".jpg", ".jpeg", ".png", ".webp", "/image/")) or k in ("img", "cover", "avatar", "icon", "poster"):
+                    out[k] = f"/img/v/{tok}.webp"
+                elif any(ext in v.lower() for ext in (".vtt", ".srt")):
+                    out[k] = f"/sub/v/{tok}.vtt"
+                else:
+                    is_dash = is_dash_url(v)
+                    s_url = f"/dash/{tok}/index.mpd" if is_dash else f"/stream/v/{tok}.mp4"
+                    if "token" not in out:
+                        out["token"] = tok
+                    if "isDash" not in out:
+                        out["isDash"] = is_dash
+                    if "streamUrl" not in out:
+                        out["streamUrl"] = s_url
+                    out[k] = s_url
+                    if "tran-audio" in v:
+                        out["isTranAudio"] = True
+                continue
+            out[k] = sanitize_data(v)
+        return out
+    elif isinstance(data, list):
+        return [sanitize_data(x) for x in data]
+    elif isinstance(data, str):
+        if data.startswith("http") and any(d in data for d in ("aoneroom.com", "hakunaymatata.com", "cloudfront.net", "movie-box.co")):
+            tok = encode_stream_token(data)
+            if any(ext in data.lower() for ext in [".jpg", ".jpeg", ".png", ".webp", "/image/"]):
+                return f"/img/v/{tok}.webp"
+            elif any(ext in data.lower() for ext in [".mpd", "__signcookie__"]):
+                return f"/dash/{tok}/index.mpd"
+            elif any(ext in data.lower() for ext in [".vtt", ".srt"]):
+                return f"/sub/v/{tok}.vtt"
+            else:
+                return f"/stream/v/{tok}.mp4"
+        return data
+    else:
+        return data
+
+_image_cache = {}
+_IMAGE_CACHE_MAX = 1200
+
+def get_cached_image(key):
+    entry = _image_cache.get(key)
+    if entry and (time.time() - entry[0] < 86400):
+        return entry[1]
+    return None
+
+def set_cached_image(key, val):
+    if len(_image_cache) > _IMAGE_CACHE_MAX:
+        keys = list(_image_cache.keys())[:250]
+        for k in keys:
+            _image_cache.pop(k, None)
+    _image_cache[key] = (time.time(), val)
+
+
+@app.route("/img/v/<path:token>")
+@app.route("/img/<path:token>")
+def image_proxy_token(token):
+    url = decode_stream_token(token)
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        return jsonify({"error": "Invalid image token"}), 400
+    w = request.args.get("w", "").strip()
+    q = request.args.get("q", "").strip()
+    if (w or q) and ("aoneroom.com" in url or "hakunaymatata.com" in url) and "x-oss-process" not in url:
+        sep = "&" if "?" in url else "?"
+        w_val = int(w) if w.isdigit() else 160
+        q_val = int(q) if q.isdigit() else 70
+        url += f"{sep}x-oss-process=image/resize,w_{w_val}/format,webp/quality,q_{q_val}"
+
+    cache_key = f"img_{token}_{w}_{q}"
+    cached = get_cached_image(cache_key)
+    if cached:
+        data, content_type = cached
+        resp = Response(data, status=200, content_type=content_type)
+        resp.headers["Cache-Control"] = "public, max-age=86400, immutable"
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+
+    try:
+        r = api._session.get(url, headers={"User-Agent": api.ANDROID_USER_AGENT}, timeout=10)
+        if r.status_code == 200:
+            c_type = r.headers.get("Content-Type", "image/webp" if ".webp" in url else "image/jpeg")
+            set_cached_image(cache_key, (r.content, c_type))
+            resp = Response(r.content, status=200, content_type=c_type)
+            resp.headers["Cache-Control"] = "public, max-age=86400, immutable"
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            return resp
+        return jsonify({"error": f"Upstream error {r.status_code}"}), r.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/api/image_proxy")
+def image_proxy():
+    """Proxy image assets (posters/avatars) to bypass CORS and hotlink protection."""
+    tok = request.args.get("t") or request.args.get("token") or ""
+    if tok:
+        return image_proxy_token(tok)
+    url = request.args.get("url", "").strip()
+    if not url:
+        return jsonify({"error": "Missing image URL"}), 400
+    token = encode_stream_token(url)
+    return image_proxy_token(token)
+
+
+@app.route("/sub/v/<path:token>")
+def sub_proxy_token(token):
+    url = decode_stream_token(token)
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        return jsonify({"error": "Invalid subtitle token"}), 400
+    try:
+        r = api._session.get(url, headers={"User-Agent": api.ANDROID_USER_AGENT}, timeout=10)
+        resp = Response(r.content, status=r.status_code, content_type="text/vtt; charset=utf-8")
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@app.route("/api/search")
+def search():
+    keyword = request.args.get("q", "").strip()
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 20))
+    subject_type = int(request.args.get("type", 0))
+    if not keyword:
+        return jsonify({"error": "Empty search keyword"}), 400
+    try:
+        ip = tracker.get_client_ip(request)
+        tracker.log_activity(ip, "SEARCH", details=f"q={keyword}", user_agent=request.headers.get("User-Agent", ""))
+        data = api.search(keyword, page=page, per_page=per_page, subject_type=subject_type)
+        return jsonify(sanitize_data(data))
+    except Exception as e:  # noqa
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/suggest")
+def suggest():
+    keyword = request.args.get("q", "").strip()
+    try:
+        return jsonify(sanitize_data(api.search_suggest(keyword)))
+    except Exception as e:  # noqa
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/detail/<subject_id>")
+def detail(subject_id):
+    try:
+        return jsonify(sanitize_data(api.subject_detail(subject_id)))
+    except Exception as e:  # noqa
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/seasons/<subject_id>")
+def seasons(subject_id):
+    try:
+        return jsonify(sanitize_data(api.season_info(subject_id)))
+    except Exception as e:  # noqa
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/api/token")
 def get_stream_token():
@@ -258,8 +429,7 @@ def get_stream_token():
 
 @app.route("/api/resources_dubs")
 def resources_dubs():
-    """Fetch resources for every dub of a title concurrently. Each dub in detail.dubs
-    has its own subjectId; this returns {dubs: [{lanName, lanCode, subjectId, list}]}."""
+    """Fetch resources for every dub of a title concurrently. Returns sanitized stream tokens."""
     subject_id = request.args.get("subjectId", "").strip()
     se = request.args.get("se", "0")
     ep = request.args.get("ep", "0")
@@ -279,10 +449,6 @@ def resources_dubs():
                 try:
                     r = api.get_resources(dub_id, se=se, ep=ep)
                     raw_list = r.get("data", r).get("list", [])
-                    for item in raw_list:
-                        raw = item.get("resourceLink") or item.get("url") or ""
-                        if raw:
-                            item["token"] = encode_stream_token(raw)
                     entry["list"] = raw_list
                 except Exception:  # noqa
                     pass
@@ -291,7 +457,7 @@ def resources_dubs():
         with ThreadPoolExecutor(max_workers=min(len(dubs), 8)) as executor:
             out = list(executor.map(fetch_dub, dubs))
 
-        return jsonify({"dubs": out})
+        return jsonify(sanitize_data({"dubs": out}))
     except Exception as e:  # noqa
         return jsonify({"error": str(e)}), 500
 
@@ -305,19 +471,14 @@ def resources():
         return jsonify({"error": "Missing subjectId"}), 400
     try:
         data = api.get_resources(subject_id, se=se, ep=ep)
-        res_list = data.get("data", {}).get("list", []) or data.get("list", [])
-        for item in res_list:
-            raw = item.get("resourceLink") or item.get("url") or ""
-            if raw:
-                item["token"] = encode_stream_token(raw)
-        return jsonify(data)
+        return jsonify(sanitize_data(data))
     except Exception as e:  # noqa
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/subtitles")
 def subtitles():
-    """Extract subtitles/captions available for a title or episode."""
+    """Extract subtitles/captions available for a title or episode with proxy tokens."""
     subject_id = request.args.get("subjectId", "").strip()
     se = request.args.get("se", "0")
     ep = request.args.get("ep", "0")
@@ -332,42 +493,15 @@ def subtitles():
             caps = item.get("extCaptions") or item.get("subtitles") or item.get("captions") or []
             if isinstance(caps, list):
                 for c in caps:
-                    url = c.get("url") or c.get("subPath") or c.get("captionUrl")
+                    raw_sub_url = c.get("url") or c.get("subPath") or c.get("captionUrl")
                     lang = c.get("language") or c.get("lanName") or c.get("lanCode") or "Subtitle"
-                    if url and url not in seen:
-                        seen.add(url)
-                        sub_list.append({"language": lang, "url": url})
+                    if raw_sub_url and raw_sub_url not in seen:
+                        seen.add(raw_sub_url)
+                        sub_tok = encode_stream_token(raw_sub_url)
+                        sub_list.append({"language": lang, "url": f"/sub/v/{sub_tok}.vtt"})
         return jsonify({"subtitles": sub_list})
     except Exception as e:  # noqa
         return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/image_proxy")
-def image_proxy():
-    """Proxy image assets (posters/avatars) to bypass CORS and hotlink protection."""
-    url = request.args.get("url", "").strip()
-    if not url:
-        return jsonify({"error": "Missing image URL"}), 400
-    try:
-        resp = api._session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        if resp.status_code == 200:
-            return Response(resp.content, status=200, content_type=resp.headers.get("Content-Type", "image/jpeg"))
-        return jsonify({"error": f"Upstream error {resp.status_code}"}), resp.status_code
-    except Exception as e:  # noqa
-        return jsonify({"error": str(e)}), 500
-
-
-def is_dash_url(url: str) -> bool:
-    return bool(url and (".mpd" in url or "__signCookie__" in url))
-
-
-def parse_dash_url(url: str):
-    parsed = urllib.parse.urlparse(url)
-    qs = urllib.parse.parse_qs(parsed.query)
-    cookie = qs.get("__signCookie__", [""])[0]
-    rep = qs.get("rep", ["0"])[0]
-    raw_mpd = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-    return raw_mpd, cookie, rep
 
 
 @app.route("/download")
@@ -376,7 +510,7 @@ def download(token=None):
     """Full download with Content-Disposition header and encrypted token support."""
     raw_token = token or request.args.get("t") or request.args.get("token") or request.args.get("url", "")
     url = decode_stream_token(raw_token)
-    if not url or ("hakunaymatata.com" not in url and "aoneroom" not in url):
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
         return jsonify({"error": "Invalid or expired download URL"}), 400
     title = request.args.get("title", "video")
     filename = title.replace("/", "_").replace('"', "")
@@ -449,7 +583,7 @@ def download(token=None):
 @app.route("/api/trending")
 def trending():
     try:
-        return jsonify(api.trending())
+        return jsonify(sanitize_data(api.trending()))
     except Exception as e:  # noqa
         return jsonify({"error": str(e)}), 500
 
@@ -458,7 +592,7 @@ def trending():
 def home():
     tab_id = request.args.get("tabId", "0")
     try:
-        return jsonify(api.home_feed(tab_id))
+        return jsonify(sanitize_data(api.home_feed(tab_id)))
     except Exception as e:  # noqa
         return jsonify({"error": str(e)}), 500
 
@@ -466,7 +600,7 @@ def home():
 @app.route("/api/related/<subject_id>")
 def related(subject_id):
     try:
-        return jsonify(api.get_recommendations(subject_id))
+        return jsonify(sanitize_data(api.get_recommendations(subject_id)))
     except Exception as e:  # noqa
         return jsonify({"error": str(e)}), 500
 
@@ -615,21 +749,19 @@ def dash_manifest(token):
     try:
         r = api._session.get(raw_mpd, headers=headers, timeout=15)
         raw_text = r.text
-        # Inject direct signed CDN parameters so client streams 100% directly from CloudFront (0 server bandwidth)
-        if policy and sig and kpid:
-            base_dash = raw_mpd.rsplit("/", 1)[0]
-            qs = f"Policy={policy}&amp;Signature={sig}&amp;Key-Pair-Id={kpid}"
-            raw_text = raw_text.replace(
-                'initialization="init-stream$RepresentationID$.m4s"',
-                f'initialization="{base_dash}/init-stream$RepresentationID$.m4s?{qs}"'
-            )
-            raw_text = raw_text.replace(
-                'media="chunk-stream$RepresentationID$-$Number%05d$.m4s"',
-                f'media="{base_dash}/chunk-stream$RepresentationID$-$Number%05d$.m4s?{qs}"'
-            )
-            # Standardize MovieBox HEVC codec tag to RFC 6381 so browser MediaSource recognizes & decodes video track
-            raw_text = raw_text.replace('codecs="hev1"', 'codecs="hvc1.1.6.L120.B0"')
-            raw_text = raw_text.replace('codecs="hvc1"', 'codecs="hvc1.1.6.L120.B0"')
+        # Route all DASH chunks through local secure proxy route /dash/{token}/...
+        # Zero external CDN URLs exposed to client or network tab!
+        raw_text = raw_text.replace(
+            'initialization="init-stream$RepresentationID$.m4s"',
+            f'initialization="/dash/{token}/init-stream$RepresentationID$.m4s"'
+        )
+        raw_text = raw_text.replace(
+            'media="chunk-stream$RepresentationID$-$Number%05d$.m4s"',
+            f'media="/dash/{token}/chunk-stream$RepresentationID$-$Number%05d$.m4s"'
+        )
+        # Standardize MovieBox HEVC codec tag to RFC 6381 so browser MediaSource recognizes & decodes video track
+        raw_text = raw_text.replace('codecs="hev1"', 'codecs="hvc1.1.6.L120.B0"')
+        raw_text = raw_text.replace('codecs="hvc1"', 'codecs="hvc1.1.6.L120.B0"')
 
         resp = Response(raw_text, status=r.status_code, content_type="application/dash+xml")
         resp.headers["Access-Control-Allow-Origin"] = "*"

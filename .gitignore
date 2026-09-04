@@ -6,4 +6,5 @@ __pycache__/
 
 tunnel_url.txt
 *.log
+server_tunnel.py
 

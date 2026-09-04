@@ -918,20 +918,30 @@ async function apiJSON(url) {
   return j;
 }
 
+const STREAM_SALT = "mb_stream_v2_salt_2026";
+
+function encodeStreamToken(str) {
+  if (!str) return "";
+  const salt = STREAM_SALT;
+  let enc = "";
+  for (let i = 0; i < str.length; i++) {
+    enc += String.fromCharCode(str.charCodeAt(i) ^ salt.charCodeAt(i % salt.length));
+  }
+  return btoa(enc).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 function optimizeImgUrl(url, w = 160, q = 60) {
   if (!url || typeof url !== 'string') return '';
-  if (url.includes('aoneroom.com') || url.includes('hakunaymatata.com')) {
-    if (!url.includes('x-oss-process')) {
-      const sep = url.includes('?') ? '&' : '?';
-      return url + sep + `x-oss-process=image/resize,w_${w}/format,webp/quality,q_${q}`;
-    }
-  }
-  return url;
+  if (url.startsWith('/img/v/') || url.startsWith('/api/image_proxy') || url.startsWith('/static/')) return url;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return url;
+  const token = encodeStreamToken(url);
+  if (!token) return '';
+  return `/img/v/${token}.webp?w=${w}&q=${q}`;
 }
 
 function imageUrlOf(cover, w = 160, q = 60) {
   if (!cover) return '';
-  const c = cover.url || (Array.isArray(cover) && cover[0] && (cover[0].url || cover[0])) || '';
+  const c = cover.url || (Array.isArray(cover) && cover[0] && (cover[0].url || cover[0])) || (typeof cover === 'string' ? cover : '');
   return optimizeImgUrl(String(c || ''), w, q);
 }
 
@@ -1123,7 +1133,7 @@ function renderCast() {
   if (castCountLabel) castCountLabel.textContent = `${m.cast.length} Members`;
 
   castCarousel.innerHTML = m.cast.map(c => {
-    const avatar = c.img || '/static/icons/icon-192.png';
+    const avatar = c.img ? optimizeImgUrl(c.img, 120, 70) : '/static/icons/icon-192.png';
     const fallbackSvg = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.4"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
     const safeName = esc(c.name).replace(/'/g, "\\'");
     const safeRole = esc(c.role || '').replace(/'/g, "\\'");
@@ -1213,7 +1223,7 @@ async function openActorModal(actorName, avatarUrl, role) {
       return `
         <div class="actor-work-card" onclick="closeActorModal(); navigateTo('/watch/${id}');" style="background:var(--surface2);border:1px solid rgba(255,255,255,0.06);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .15s, border-color .15s;display:flex;flex-direction:column;">
           <div style="position:relative;aspect-ratio:2/3;background:#111;overflow:hidden;">
-            ${optSrc ? `<img src="${esc(optSrc)}" alt="${esc(title)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" onerror="this.onerror=null;this.src='${esc(rawSrc)}';" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">No Poster</div>`}
+            ${optSrc ? `<img src="${esc(optSrc)}" alt="${esc(title)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" onerror="this.onerror=null;this.style.opacity=0.35;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;">No Poster</div>`}
             ${rating ? `<div style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;color:#fff;display:flex;align-items:center;gap:3px;">${starSvg} ${esc(rating)}</div>` : ''}
           </div>
           <div style="padding:8px 10px;flex:1;display:flex;flex-direction:column;justify-content:space-between;">
@@ -1266,7 +1276,7 @@ function renderRecs() {
     return `
       <div class="carousel-card" onclick="navigateTo('/watch/${id}')" style="flex:0 0 145px;width:145px;background:var(--surface);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .2s, border-color .2s;border:1px solid rgba(255,255,255,0.08);">
         <div style="position:relative;width:100%;height:210px;background:#111;overflow:hidden;">
-          <img src="${esc(optSrc)}" alt="${t}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" onerror="this.onerror=null;this.src='${esc(it.img)}';" />
+          <img src="${esc(optSrc)}" alt="${t}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" onerror="this.onerror=null;this.style.opacity=0.35;" />
           ${dub}
         </div>
         <div style="padding:8px 10px;display:flex;flex-direction:column;gap:3px;">
@@ -1293,7 +1303,8 @@ function buildOptions(list) {
   const out = [];
   const seen = new Set();
   for (const r of list) {
-    const url = String(r.resourceLink || r.url || r.link || '');
+    if (r.isTranAudio) continue;
+    const url = String(r.streamUrl || r.resourceLink || r.url || r.link || '');
     if (url.includes('tran-audio')) continue; // Skip audio-only track links for video player
 
     const rawRes = parseInt(r.resolution, 10);
@@ -1307,7 +1318,7 @@ function buildOptions(list) {
   }
   if (!out.length) {
     for (const r of list) {
-      if (!String(r.resourceLink || '').includes('tran-audio')) {
+      if (!r.isTranAudio && !String(r.streamUrl || r.resourceLink || '').includes('tran-audio')) {
         out.push({ label: r.quality || r.name || 'Stream', baseRes: 0, res: r, hevc: isHevcRes(r) });
       }
     }
@@ -1339,8 +1350,10 @@ function currentRaw() {
 }
 
 function rawUrlOf(res) {
-  return res && (res.resourceLink || res.url || res.link || '');
+  return res && (res.streamUrl || res.resourceLink || res.url || res.link || '');
 }
+
+function applyStream(autoplay) {}
 
 function getQualitiesSummary(list) {
   if (!list || !list.length) return "N/A";
@@ -1651,23 +1664,21 @@ function getSelectedPlayRaw() {
   return matched;
 }
 
-const STREAM_SALT = "mb_stream_v2_salt_2026";
-
-function encodeStreamToken(str) {
-  if (!str) return "";
-  const salt = STREAM_SALT;
-  let enc = "";
-  for (let i = 0; i < str.length; i++) {
-    enc += String.fromCharCode(str.charCodeAt(i) ^ salt.charCodeAt(i % salt.length));
-  }
-  return btoa(enc).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
 function getStreamToken(raw) {
   if (!raw) return "";
-  if (typeof raw === "object" && raw.token) return raw.token;
-  const rawUrl = rawUrlOf(raw);
-  return encodeStreamToken(rawUrl);
+  if (typeof raw === "object") {
+    if (raw.token) return raw.token;
+    return getStreamToken(rawUrlOf(raw));
+  }
+  if (typeof raw === "string") {
+    const m = raw.match(/\/(?:stream\/v|dash|download\/v)\/([^/?#.]+)/);
+    if (m) return m[1];
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      return encodeStreamToken(raw);
+    }
+    return raw;
+  }
+  return "";
 }
 
 function getAbsoluteStreamUrl(playerType = 'auto') {
@@ -1675,7 +1686,7 @@ function getAbsoluteStreamUrl(playerType = 'auto') {
   if (!raw) return "";
   const token = getStreamToken(raw);
   if (!token) return "";
-  const isDash = !!(raw.dashUrl || (raw.resourceLink && (raw.resourceLink.includes('.mpd') || raw.resourceLink.includes('__signCookie__'))));
+  const isDash = !!(raw.isDash || (raw.streamUrl && raw.streamUrl.includes('/dash/')) || raw.dashUrl || (raw.resourceLink && (raw.resourceLink.includes('.mpd') || raw.resourceLink.includes('__signCookie__'))));
   if (isDash) {
     return `${window.location.origin}/dash/${token}/index.mpd`;
   }
@@ -2212,7 +2223,7 @@ async function downloadSingleFile(idx) {
       return;
     }
 
-    const token = encodeStreamToken(rawUrl);
+    const token = getStreamToken(rawUrl);
     const dlUrl = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
     triggerBrowserDownload(dlUrl);
     toast(`✓ Downloading ${item.title}...`);
@@ -2260,7 +2271,7 @@ async function downloadSelectedBatch() {
     let startedCount = 0;
     resolvedTasks.forEach(({ item, rawUrl }, i) => {
       if (rawUrl) {
-        const token = encodeStreamToken(rawUrl);
+        const token = getStreamToken(rawUrl);
         const dlUrl = `/download/v/${token}.mp4?title=${encodeURIComponent(item.title)}`;
         setTimeout(() => {
           triggerBrowserDownload(dlUrl);
