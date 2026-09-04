@@ -1,5 +1,5 @@
-// OFC Movies Service Worker v1.0
-const CACHE_NAME = 'ofc-movies-v1';
+// OFC Movies Service Worker v2.0
+const CACHE_NAME = 'ofc-movies-v2';
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.json',
@@ -39,7 +39,7 @@ self.addEventListener('fetch', event => {
   // Network-first strategy for HTML pages, cache-first for static icons/assets
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match('/'))
+      fetch(event.request, { cache: 'reload' }).catch(() => caches.match('/'))
     );
     return;
   }
