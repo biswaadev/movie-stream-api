@@ -1,510 +1,475 @@
-# Video-on-Demand (VOD) Client API & Mobile Integration Specification
+# OFC Movies — Complete API & Client Integration Specification
 
-This technical specification details the client integration architecture, HMAC security protocol, catalog endpoints, and MPEG-DASH streaming lifecycle for developing native mobile clients (Android, iOS, Flutter, React Native).
-
----
-
-## 1. System Architecture
-
-The service utilizes a direct client-to-CDN architecture where catalog metadata is retrieved from the gateway service, while high-bitrate media playback is streamed directly from distributed CloudFront edge servers to the client.
-
-```
-┌─────────────────┐
-│   Mobile App    │
-└─┬─────────────┬─┘
-  │             │
-  │ (1) Metadata & Session Auth
-  │             │
-  ▼             ▼
-┌───────────────┴───────────────┐        ┌───────────────────────────────┐
-│      API Gateway Service      │        │      Global CloudFront CDN    │
-│    (api6.aoneroom.com)        │        │   (sacdn.hakunaymatata.com)   │
-└───────────────────────────────┘        └───────────────┬───────────────┘
-                                                         │
-                                        (2) Direct MPEG-DASH 1080p Video
-                                                         │
-                                                         ▼
-                                                ┌─────────────────┐
-                                                │ ExoPlayer / App │
-                                                └─────────────────┘
-```
-
-* **Data Delivery:** High-bitrate video segments stream directly from CDN edge caches.
-* **Stream Profiles:** Multi-resolution MPEG-DASH (1080p, 720p, 480p) supporting HEVC (H.265) and AVC (H.264).
-* **Multi-Track Audio:** Discrete language dub tracks with timed text subtitle manifests.
+This technical specification details the complete API architecture for the **OFC Movies Platform**. It covers both the **Shielded Application Backend API** (which conceals all upstream CDN and API endpoints from client apps) and the **Upstream Provider Gateway Specification** (for low-level protocol reference and native mobile integration).
 
 ---
 
-## 2. Service Endpoints & Configuration
+## Table of Contents
+1. [Architecture Overview](#1-architecture-overview)
+2. [Section A: Shielded Application Backend API](#2-section-a-shielded-application-backend-api)
+   - [Authentication & Token Security](#a-token-encryption--stream-shielding)
+   - [Catalog & Discovery Endpoints](#b-catalog--discovery-endpoints)
+   - [Media Resource & Stream Endpoints](#c-media-resource--stream-endpoints)
+   - [Secure Asset & Proxy Endpoints](#d-secure-asset--proxy-endpoints)
+   - [Admin & Analytics Endpoints](#e-admin--analytics-endpoints)
+3. [Section B: Client Player Integration Guide](#3-section-b-client-player-integration-guide)
+   - [Web Player (DASH.js / HLS)](#a-web-player-integration)
+   - [Native Android (ExoPlayer / Media3)](#b-native-android-exoplayer--media3)
+   - [Flutter (better_player / video_player)](#c-flutter-integration)
+   - [External Players (VLC & MX Player Intents)](#d-external-players-vlc--mx-player)
+4. [Section C: Direct Upstream Provider Gateway Specification](#4-section-c-direct-upstream-provider-gateway-specification)
+   - [Gateway Hosts & Client Headers](#gateway-hosts--client-headers)
+   - [HMAC-MD5 Request Signing Algorithm](#hmac-md5-request-signing-algorithm)
+   - [Session Bootstrap & Lifecycle](#session-bootstrap--lifecycle)
+   - [Upstream Endpoints Reference](#upstream-endpoints-reference)
 
-### Gateway Hosts
+---
 
-| Target | Host URL | Usage |
-| :--- | :--- | :--- |
-| **Primary Gateway** | `https://api6.aoneroom.com` | Primary API cluster |
-| **Failover Gateway 1** | `https://api5.aoneroom.com` | Secondary failover host |
-| **Failover Gateway 2** | `https://api4.aoneroom.com` | Tertiary failover host |
+# 1. Architecture Overview
 
-### Client Configuration Constants
+To provide fast, reliable media playback and protect upstream CDN credentials from public exposure in browser DevTools and network inspection tools, the platform uses a **Shielded Gateway Architecture**:
 
-```properties
-CLIENT_SECRET_KEY = 76iRl07s0xSN9jqmEWAt79EBJZulIQIsV64FZr2O
-CLIENT_APP_ID = com.community.oneroom
-CLIENT_VERSION_CODE = 50020045
-CLIENT_VERSION_NAME = 3.0.03.0529.03
+```
+┌────────────────────────────────────────────────────────┐
+│      Client Applications (Web / Android / iOS)         │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            │ All requests use opaque tokens (No CDN URLs exposed)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│           OFC Movies Application Backend               │
+│               (Flask + Gunicorn + Cache)               │
+├───────────────────────────┬────────────────────────────┤
+│ • JSON Sanitizer Engine   │ • Token Cipher (XOR Salt)  │
+│ • DASH Manifest Shield    │ • WebP Image Compressor    │
+│ • Segment Proxy Worker    │ • Stream Range Forwarder   │
+└─────────────┬────────────────────────────┬─────────────┘
+              │                            │
+  (1) Signed API Requests      (2) Segment Streaming (ExoPlayer UA)
+              │                            │
+              ▼                            ▼
+┌───────────────────────────┐┌───────────────────────────┐
+│  Upstream BFF Gateway     ││   CloudFront / Ali CDN    │
+│   (api6.aoneroom.com)     ││ (sacdn.hakunaymatata.com) │
+└───────────────────────────┘└───────────────────────────┘
 ```
 
-### Standard Client User-Agent
-```http
-com.community.oneroom/50020045 (Linux; U; Android 13; en_US; 22101316G; Build/TQ2A.230405.003; Cronet/135.0.7012.3)
-```
+### Key Security & Performance Guarantees:
+* **Zero Upstream CDN Leaks:** External domains (`*.aoneroom.com`, `*.hakunaymatata.com`, `*.cloudfront.net`, `movie-box.co`) and raw CloudFront cookies are completely scrubbed from all API responses.
+* **Lightweight WebP Images:** Images are automatically resized to mobile-optimized WebP (~7 KB vs 2.8 MB original) via the proxy.
+* **Byte-Range Seeking:** The `/stream/v/{token}.mp4` proxy injects required Android User-Agents and forwards HTTP `206 Partial Content` ranges for instant video seeking.
+* **Manifest Chunk Masking:** MPEG-DASH manifests route initialization and media segments through `/dash/{token}/{segment}` proxy paths so player network activity remains 100% on the application domain.
 
-### Client Device Information (`X-Client-Info`)
-Every request carries a stringified JSON header identifying the client environment:
-```json
-{
-  "package_name": "com.community.oneroom",
-  "version_name": "3.0.03.0529.03",
-  "version_code": 50020045,
-  "os": "android",
-  "os_version": "13",
-  "install_ch": "ps",
-  "device_id": "0123456789abcdef0123456789abcdef",
-  "install_store": "ps",
-  "gaid": "38400000-8cf0-11bd-b23e-10b96e4ef00d",
-  "brand": "Redmi",
-  "model": "22101316G",
-  "system_language": "en",
-  "net": "NETWORK_WIFI",
-  "region": "US",
-  "timezone": "America/New_York",
-  "sp_code": "40401",
-  "X-Play-Mode": "2"
-}
+---
+
+# 2. Section A: Shielded Application Backend API
+
+Base URL: `https://<your-domain>` (or `http://127.0.0.1:5000` locally).
+
+---
+
+### A. Token Encryption & Stream Shielding
+
+All stream URLs, media segments, download links, images, and subtitles are referenced via URL-safe encrypted tokens.
+
+#### Cipher Specification:
+* **Algorithm:** Symmetric byte-level XOR with cyclic salt key.
+* **Salt Key:** `mb_stream_v2_salt_2026`
+* **Encoding:** URL-safe Base64 (padding stripped: `+` replaced with `-`, `/` with `_`, trailing `=` removed).
+
+#### Python Reference Implementation:
+```python
+import base64
+
+STREAM_SALT = "mb_stream_v2_salt_2026"
+
+def encode_stream_token(url: str) -> str:
+    salt_bytes = STREAM_SALT.encode("utf-8")
+    url_bytes = url.encode("utf-8")
+    enc = bytes([b ^ salt_bytes[i % len(salt_bytes)] for i, b in enumerate(url_bytes)])
+    return base64.urlsafe_b64encode(enc).decode("utf-8").rstrip("=")
+
+def decode_stream_token(token: str) -> str:
+    # Strip extensions if present (.mp4, .m4s, .webp, etc.)
+    for ext in (".mp4", ".m4s", ".jpg", ".png", ".webp", ".vtt", ".mpd"):
+        if token.endswith(ext):
+            token = token[:-len(ext)]
+            break
+    pad = len(token) % 4
+    if pad:
+        token += "=" * (4 - pad)
+    enc = base64.urlsafe_b64decode(token)
+    salt_bytes = STREAM_SALT.encode("utf-8")
+    return bytes([b ^ salt_bytes[i % len(salt_bytes)] for i, b in enumerate(enc)]).decode("utf-8")
 ```
 
 ---
 
-## 3. Request Security & Signature Specification
+### B. Catalog & Discovery Endpoints
 
-All HTTP requests to the API gateway must be cryptographically signed with two headers: `X-Client-Token` and `x-tr-signature`.
-
-### A. `X-Client-Token`
-* **Input:** Unix epoch timestamp in seconds (integer, e.g. `1725375000`).
-* **Calculation:** Reverse the digits of the timestamp, compute the **MD5** hex hash of the reversed string.
-* **Output Format:** `"{timestamp},{md5_hex}"`
-* *Example:*
-  ```
-  Timestamp: 1725375000
-  Reversed:  0005735271
-  MD5 Hash:  d41d8cd98f00b204e9800998ecf8427e
-  Result:    1725375000,d41d8cd98f00b204e9800998ecf8427e
-  ```
-
-### B. `x-tr-signature` (HMAC-MD5)
-The gateway validates request integrity using an HMAC-MD5 signature over a canonical representation of the request.
-
-1. **Construct the Canonical String** using newline (`\n`) separated fields:
-   ```text
-   HTTP_METHOD
-   ACCEPT_HEADER
-   CONTENT_TYPE
-   BODY_LENGTH
-   TIMESTAMP
-   BODY_MD5_HEX
-   CANONICAL_URI
-   ```
-   * `HTTP_METHOD`: Uppercase method (`GET` or `POST`).
-   * `ACCEPT_HEADER`: Value of Accept header (`application/json`).
-   * `CONTENT_TYPE`: Value of Content-Type (`application/json` when body is present, otherwise empty).
-   * `BODY_LENGTH`: Length of body in bytes as string (empty if no body).
-   * `TIMESTAMP`: Unix timestamp in seconds (string).
-   * `BODY_MD5_HEX`: MD5 hex hash of first 4096 bytes of body (empty if no body).
-   * `CANONICAL_URI`: Pathname plus alphabetized/sorted query parameters (e.g., `/path?a=1&b=2`).
-
-2. **Compute Signature:**
-   * Decode `CLIENT_SECRET_KEY` from Base64 into binary key bytes.
-   * Calculate **HMAC-MD5** of the canonical UTF-8 string using the key bytes.
-   * Base64-encode the resulting HMAC digest.
-3. **Format:** `"{timestamp}|2|{base64_hmac}"`
-
----
-
-## 4. Session Bootstrap & Token Lifecycle
-
-Prior to fetching catalog metadata, the client initializes an authenticated session token.
-
-### Bootstrap Request
-* **Method:** `GET`
-* **Path:** `/wefeed-mobile-bff/tab-operating?page=1&tabId=0&version=`
-* **Headers:** Include signed headers (`X-Client-Token`, `x-tr-signature`, `User-Agent`, `X-Client-Info`).
-
-### Token Extraction
-Extract the session object from the response header **`x-user`** (or `X-User`):
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI...",
-  "uid": 12345678
-}
-```
-
-### Authorization Header
-Attach the session token to all subsequent requests:
-```http
-Authorization: Bearer {token}
-```
-*Note: If the gateway returns HTTP 401 Unauthorized, refresh the session by repeating the bootstrap step.*
-
----
-
-## 5. API Catalog Endpoints
-
-### 1. Home Page Feeds, Rankings & Category Carousels
-Retrieves curated media carousels, home banners, trending titles, top rankings, and genre rows for the app's landing screen.
+#### 1. Home Feed
+Returns categorized rows of trending movies, Hollywood hits, cinema releases, and collections.
 
 * **Method:** `GET`
-* **Path:** `/wefeed-mobile-bff/tab-operating`
+* **Path:** `/api/home`
 * **Query Parameters:**
-  * `tabId`: Feed Category Identifier:
-    * `0`: **Featured Home Feed** (Trending Now, Hollywood, Cinema, Bollywood, South Indian, Coming Soon)
-    * `1`: **Movies Collection** (Hollywood Hits, Regional Cinema)
-    * `2`: **Top Charts & Rankings** (Top Movies, Trending in Cinema, Sci-Fi Future, Super Hero, Action, Comedy)
-    * `3`: **Kids & Learning**
-  * `page`: Page index (default: `1`)
-  * `version`: Version token (pass empty string `""` on first call; cache and pass the returned `version` string on subsequent calls)
-
-* **Key Categories Returned in Home Feed (`tabId=0` & `tabId=2`):**
-  * 🔥 **Trending Now**: Top viral titles updated daily
-  * 🏆 **Top Movies (Rankings)**: Highest-ranked box-office titles (`tabId=2`)
-  * 🎬 **Cinema / New Releases**: Latest theatrical releases
-  * 🌐 **Hollywood**: English & dual-audio blockbusters
-  * 🎭 **Bollywood & South Indian**: Hindi, Tamil, Telugu blockbusters
-  * 🦸 **Super Hero & Sci-Fi Future**: Marvel, DC, and futuristic sci-fi
-  * 📅 **Coming Soon**: Upcoming titles with posters and release dates
-
-* **Response Sample (Home Feed Structure):**
+  * `tabId` (optional): Feed tab (`0`: Featured Home, `1`: Movies, `2`: Top Charts & Rankings, `3`: Kids). Default: `0`.
+* **Sample Response:**
   ```json
   {
-    "code": 0,
-    "data": {
-      "tabId": 0,
-      "version": "3bac7cb9205a921072c59be089a2d33c",
-      "items": [
-        {
-          "type": "SUBJECTS_MOVIE",
-          "title": "🔥Trending Now",
-          "subjects": [
-            {
-              "subjectId": "5349301616099452064",
-              "title": "Gandhari [Hindi]",
-              "releaseDate": "2026-09-03",
-              "cover": {
-                "url": "https://pbcdn.aoneroom.com/image/2026/09/03/2c4018c2164acab9.jpg"
-              }
+    "tabId": 0,
+    "items": [
+      {
+        "type": "SUBJECTS_MOVIE",
+        "title": "🔥Trending Now",
+        "subjects": [
+          {
+            "subjectId": "8282836313385190960",
+            "title": "JoJo's Bizarre Adventure [Hindi]",
+            "releaseDate": "2012-10-04",
+            "imdbRatingValue": "8.5",
+            "corner": "Hindi",
+            "description": "The story of the Joestar family...",
+            "cover": {
+              "url": "/img/v/BRYrAwdISk4dPRVWMV0AAxo6QF9dW0MBMB5bGwgACjpZ...webp?w=180&q=45",
+              "width": 750,
+              "height": 1071
             }
-          ]
-        },
-        {
-          "type": "SUBJECTS_MOVIE",
-          "title": "Hollywood",
-          "subjects": [
-            {
-              "subjectId": "7826893701690839800",
-              "title": "The Runner [Hindi]",
-              "releaseDate": "2026-09-02",
-              "cover": {
-                "url": "https://pbcdn.aoneroom.com/image/2026/08/27/cca59929eb029e9f.jpg"
-              }
-            }
-          ]
-        }
-      ]
-    }
+          }
+        ]
+      }
+    ]
   }
   ```
 
----
+#### 2. Daily Trending
+Fetches the top viral and trending titles across all categories.
 
-### 2. Anime & Genre Catalog Browsing
-To browse Anime and specific genres in your mobile app, query the search endpoint with appropriate type filters:
-
-* **Method:** `POST`
-* **Path:** `/wefeed-mobile-bff/subject-api/search`
-* **Browse Anime Series:**
+* **Method:** `GET`
+* **Path:** `/api/trending`
+* **Sample Response:**
   ```json
   {
-    "keyword": "Anime",
-    "page": 1,
-    "perPage": 20,
-    "subjectType": 2
-  }
-  ```
-  *(subjectType: `2` filters exclusively for episodic series and anime).*
-
-* **Browse Top Ranked Media:**
-  ```json
-  {
-    "keyword": "Top",
-    "page": 1,
-    "perPage": 20,
-    "subjectType": 0
-  }
-  ```
-
----
-
-### 2. Search Media Catalog
-Full-text query against titles, keywords, and release years.
-
-* **Method:** `POST`
-* **Path:** `/wefeed-mobile-bff/subject-api/search`
-* **Request Body:**
-  ```json
-  {
-    "keyword": "Avatar",
-    "page": 1,
-    "perPage": 20,
-    "subjectType": 0
-  }
-  ```
-  *(subjectType: `0` = All Media, `1` = Feature Films, `2` = Episodic Series)*
-
-* **Response:**
-  ```json
-  {
-    "code": 0,
     "data": {
       "items": [
         {
-          "subjectId": "1654274595068805784",
-          "title": "Avatar",
-          "subjectType": 1,
-          "releaseDate": "2009-12-18",
-          "imdbRating": "7.9",
+          "subjectId": "5349301616099452064",
+          "title": "Gandhari [Hindi]",
+          "releaseDate": "2026-09-03",
+          "imdbRatingValue": "6.4",
+          "genre": "Action, Drama, Thriller",
+          "description": "Follows a mother's relentless pursuit...",
           "cover": {
-            "url": "https://pbcdn.aoneroom.com/image/2026/01/27/d0afc52be1b6f93d5c9a70f9105f3a37.jpg"
+            "url": "/img/v/BRYrAwdISk4dPRVWMV0AA...webp?w=180&q=45"
           }
         }
-      ],
-      "pager": { "hasMore": true, "totalCount": 100 }
-    }
-  }
-  ```
-
----
-
-### 3. Search Autocomplete Suggestions
-* **Method:** `GET`
-* **Path:** `/wefeed-mobile-bff/subject-api/search-suggest`
-* **Query Parameters:**
-  * `keyword`: Partial query prefix (e.g. `Avat`)
-  * `perPage`: Result limit (e.g. `10`)
-
----
-
-### 4. Media Title Details & Metadata
-Retrieves full title metadata, synopsis, localized dub editions, and cast details.
-
-* **Method:** `GET`
-* **Path:** `/wefeed-mobile-bff/subject-api/get`
-* **Query Parameters:**
-  * `subjectId`: Media item identifier (e.g. `1654274595068805784`)
-
-* **Response Structure:**
-  ```json
-  {
-    "code": 0,
-    "data": {
-      "subjectId": "1654274595068805784",
-      "title": "Avatar [Hindi]",
-      "postTitle": "Avatar",
-      "contentRating": "PG-13",
-      "releaseDate": "2009-12-18",
-      "durationSeconds": 9720,
-      "description": "A paraplegic Marine dispatched to the moon Pandora on a unique mission becomes torn between following his orders and protecting the world he feels is his home.",
-      "cover": {
-        "url": "https://pbcdn.aoneroom.com/image/2026/01/27/d0afc52be1b6f93d5c9a70f9105f3a37.jpg",
-        "width": 640,
-        "height": 960
-      },
-      "stills": {
-        "url": "https://pbcdn.aoneroom.com/image/2023/03/23/92f5465c28dfb684904e3bda68038194.jpg",
-        "width": 1024,
-        "height": 428
-      },
-      "dubs": [
-        {
-          "subjectId": "8906247916759695608",
-          "lanName": "Original Audio",
-          "lanCode": "en",
-          "original": true
-        },
-        {
-          "subjectId": "1654274595068805784",
-          "lanName": "Hindi dub",
-          "lanCode": "hi",
-          "original": false
-        },
-        {
-          "subjectId": "3387445081316775448",
-          "lanName": "Tamil dub",
-          "lanCode": "ta",
-          "original": false
-        },
-        {
-          "subjectId": "5331311270480462024",
-          "lanName": "Telugu dub",
-          "lanCode": "te",
-          "original": false
-        }
-      ],
-      "staffList": [
-        {
-          "staffId": "6788255266560690664",
-          "name": "James Cameron",
-          "character": "Director / Writer",
-          "avatarUrl": "https://pbcdn.aoneroom.com/image/2022/11/15/cdb17ee9325004c3f10d07645bba5eee.jpg"
-        },
-        {
-          "staffId": "3994348652033481080",
-          "name": "Sam Worthington",
-          "character": "Jake Sully",
-          "avatarUrl": "https://pbcdn.aoneroom.com/image/2022/09/02/1f75434211ac1a206c2f6166ba7a89fd.jpg"
-        },
-        {
-          "staffId": "7901170757754605944",
-          "name": "Zoe Saldana",
-          "character": "Neytiri",
-          "avatarUrl": "https://pbcdn.aoneroom.com/image/2022/09/02/242ceae290dd9d08ccee8d3327616429.jpg"
-        }
       ]
     }
   }
   ```
 
----
-
-### 5. Episodic Series Seasons & Episode Index
-* **Method:** `GET`
-* **Path:** `/wefeed-mobile-bff/subject-api/season-info`
-* **Query Parameters:**
-  * `subjectId`: Series subject identifier (e.g. `102175217904222864`)
-* **Response:**
-  Returns available seasons list, episode numbers, episode titles, thumbnails, and runtimes.
-
----
-
-### 6. Video Stream Manifest Resolver (`play-info`)
-Resolves playback streams and secure CloudFront access credentials for a title.
+#### 3. Search Catalog
+Full-text search across movies and TV series.
 
 * **Method:** `GET`
-* **Path:** `/wefeed-mobile-bff/subject-api/play-info`
+* **Path:** `/api/search`
 * **Query Parameters:**
-  * `subjectId`: Media or dub item identifier
-  * `se`: Season index (`0` for standalone movies, `1+` for series)
-  * `ep`: Episode index (`0` for standalone movies, `1+` for series)
-
-* **Response Structure:**
+  * `q` (required): Search keyword (e.g. `Avatar`)
+  * `page` (optional): Page number (default: `1`)
+  * `type` (optional): Media filter (`0`: All, `1`: Movies only, `2`: Series/Anime only). Default: `0`.
+* **Sample Response:**
   ```json
   {
-    "code": 0,
+    "items": [
+      {
+        "id": "1654274595068805784",
+        "title": "Avatar",
+        "subjectType": 1,
+        "year": "2009",
+        "rating": "7.9",
+        "img": "/img/v/BRYrAwdISk4d...webp?w=180&q=45",
+        "description": "A paraplegic Marine dispatched to the moon Pandora..."
+      }
+    ],
+    "pager": { "hasMore": true, "totalCount": 100 }
+  }
+  ```
+
+#### 4. Search Autocomplete Suggestions
+Fast typeahead search suggestion tags.
+
+* **Method:** `GET`
+* **Path:** `/api/suggest`
+* **Query Parameters:**
+  * `q` (required): Query prefix (e.g. `avat`)
+* **Sample Response:**
+  ```json
+  {
+    "data": [
+      { "id": "1654274595068805784", "title": "Avatar" },
+      { "id": "6739928172911293812", "title": "Avatar: The Way of Water" }
+    ]
+  }
+  ```
+
+---
+
+### C. Media Resource & Stream Endpoints
+
+#### 1. Title Details & Dubs Metadata
+Returns full synopsis, localized audio dub editions, cast, ratings, and runtime.
+
+* **Method:** `GET`
+* **Path:** `/api/detail/{subjectId}`
+* **Sample Response:**
+  ```json
+  {
+    "subjectId": "1654274595068805784",
+    "title": "Avatar [Hindi]",
+    "durationSeconds": 9720,
+    "description": "A paraplegic Marine dispatched to the moon Pandora...",
+    "cover": {
+      "url": "/img/v/BRYrAwdISk4d...webp?w=180&q=45"
+    },
+    "dubs": [
+      { "subjectId": "8906247916759695608", "lanName": "Original Audio", "original": true },
+      { "subjectId": "1654274595068805784", "lanName": "Hindi dub", "original": false },
+      { "subjectId": "3387445081316775448", "lanName": "Tamil dub", "original": false }
+    ],
+    "staffList": [
+      {
+        "name": "James Cameron",
+        "character": "Director",
+        "avatarUrl": "/img/v/BRYr...webp?w=120&q=45"
+      }
+    ]
+  }
+  ```
+
+#### 2. Series Seasons & Episodes Index
+Returns the list of seasons and available episodes for series.
+
+* **Method:** `GET`
+* **Path:** `/api/seasons/{subjectId}`
+* **Sample Response:**
+  ```json
+  {
+    "seasons": [
+      { "se": 0, "title": "Season 1", "maxEp": 24 },
+      { "se": 1, "title": "Season 2", "maxEp": 12 }
+    ]
+  }
+  ```
+
+#### 3. Available Streams & Resolutions
+Retrieves available resolutions (1080p, 720p, 480p, HEVC, H.264) for a title or episode, returning shielded `/stream/v/...` or `/dash/...` endpoints.
+
+* **Method:** `GET`
+* **Path:** `/api/resources`
+* **Query Parameters:**
+  * `subjectId` (required): Media identifier
+  * `se` (optional): Season index (`0` for movie, `1+` for TV series). Default: `0`.
+  * `ep` (optional): Episode index (`0` for movie, `1+` for TV series). Default: `0`.
+* **Sample Response:**
+  ```json
+  {
     "data": {
-      "streams": [
+      "list": [
         {
+          "resolution": 1080,
           "codecName": "hevc",
-          "duration": 10689,
-          "resolutions": "1080,720,480",
-          "size": 4980781430,
-          "signCookie": "CloudFront-Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9zYWNkbi5oYWt1bmF5bWF0YXRhLmNvbS9kYXNoLzE2NTQyNzQ1OTUwNjg4MDU3ODRfMF8wXzEwODBfaDI2NV85MTkvKiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc4OTA1MjU3Mn19fV19;CloudFront-Signature=...;CloudFront-Key-Pair-Id=KMHN1LQ1HEUPL;"
-        }
-      ]
-    }
-  }
-  ```
-
----
-
-### 7. Related Media Recommendations ("More Like This")
-Retrieves personalized similar movies, related series, and franchise sequels associated with a specific title for the details screen.
-
-* **Method:** `POST`
-* **Path:** `/wefeed-mobile-bff/subject-api/play-related-rec`
-* **Request Body:**
-  ```json
-  {
-    "subjectId": "1654274595068805784"
-  }
-  ```
-* **Response Sample:**
-  ```json
-  {
-    "code": 0,
-    "data": {
-      "items": [
+          "size": 361030181,
+          "duration": 1422,
+          "isDash": true,
+          "token": "BRYrAwdISk4ePhVWMV0JDR8qXFFLWwwWP...",
+          "streamUrl": "/dash/BRYrAwdISk4ePhVWMV0JDR8qXFFLWwwWP.../index.mpd"
+        },
         {
-          "subjectId": "5286679345266918984",
-          "subjectType": 1,
-          "title": "Avengers: Infinity War [Hindi]",
-          "releaseDate": "2018-04-27",
-          "duration": "2h 29m",
-          "genre": "Action, Adventure, Sci-Fi",
-          "imdbRatingValue": "8.4",
-          "cover": {
-            "url": "https://pbcdn.aoneroom.com/image/2026/01/27/edd42613fb50bad2e5552966a0d6cba1.jpg"
-          },
-          "corner": "Hindi",
-          "restrictKid": 0
+          "resolution": 720,
+          "codecName": "h264",
+          "size": 245103991,
+          "duration": 1422,
+          "isDash": false,
+          "token": "BRYrAwdISk4ePhVWMV0JDR8qXFFLWwwWQ...",
+          "streamUrl": "/stream/v/BRYrAwdISk4ePhVWMV0JDR8qXFFLWwwWQ....mp4"
         }
       ]
     }
   }
   ```
 
+#### 4. Multi-Dub Concurrent Streams (`resources_dubs`)
+Concurrently resolves available video streams for every dubbed language track of the title.
+
+* **Method:** `GET`
+* **Path:** `/api/resources_dubs`
+* **Query Parameters:**
+  * `subjectId` (required): Media identifier
+  * `se` (optional): Season index. Default: `0`.
+  * `ep` (optional): Episode index. Default: `0`.
+* **Sample Response:**
+  ```json
+  {
+    "dubs": [
+      {
+        "subjectId": "8906247916759695608",
+        "lanName": "Original Audio",
+        "list": [
+          { "resolution": 1080, "streamUrl": "/dash/TOKEN_1/index.mpd", "token": "TOKEN_1" }
+        ]
+      },
+      {
+        "subjectId": "1654274595068805784",
+        "lanName": "Hindi dub",
+        "list": [
+          { "resolution": 1080, "streamUrl": "/dash/TOKEN_2/index.mpd", "token": "TOKEN_2" }
+        ]
+      }
+    ]
+  }
+  ```
+
+#### 5. Subtitles & Closed Captions
+Extracts timed-text subtitle tracks for a title or episode.
+
+* **Method:** `GET`
+* **Path:** `/api/subtitles`
+* **Query Parameters:**
+  * `subjectId` (required): Media identifier
+  * `se` (optional): Season index. Default: `0`.
+  * `ep` (optional): Episode index. Default: `0`.
+* **Sample Response:**
+  ```json
+  {
+    "subtitles": [
+      { "language": "English", "url": "/sub/v/TOKEN_EN.vtt" },
+      { "language": "Hindi", "url": "/sub/v/TOKEN_HI.vtt" },
+      { "language": "Spanish", "url": "/sub/v/TOKEN_ES.vtt" }
+    ]
+  }
+  ```
+
+#### 6. Related Media Recommendations
+* **Method:** `GET`
+* **Path:** `/api/related/{subjectId}`
+* **Response:** Array of recommended similar titles with posters, ratings, and release years.
+
 ---
 
-## 6. Manifest Parsing & Playback Integration
+### D. Secure Asset & Proxy Endpoints
 
-### Step 1: Extract Base Stream URL from `signCookie`
-The `signCookie` contains an encoded `CloudFront-Policy` parameter. Decode the Base64 policy JSON to resolve the resource path:
+#### 1. DASH Master Manifest Proxy
+Delivers the `.mpd` manifest with representation chunks rewritten to point exclusively to the local backend proxy.
 
-```json
-{
-  "Statement": [
-    {
-      "Resource": "https://sacdn.hakunaymatata.com/dash/1654274595068805784_0_0_1080_h265_919/*"
-    }
-  ]
-}
+* **Method:** `GET`
+* **Path:** `/dash/{token}/index.mpd`
+* **Headers:** Standard browser headers.
+* **Behavior:** Proxies upstream manifest, replaces initialization/media chunk paths with `/dash/{token}/init-stream...` and `/dash/{token}/chunk-stream...`. Sets `Content-Type: application/dash+xml` and `Access-Control-Allow-Origin: *`.
+
+#### 2. DASH Media Segment Proxy
+Streams `.m4s` initialization and media segments from upstream CloudFront using the securely decoded cookie.
+
+* **Method:** `GET`
+* **Path:** `/dash/{token}/{segment}`
+* **Parameters:** `segment` e.g. `init-stream0.m4s` or `chunk-stream0-00001.m4s`.
+* **Behavior:** Streams segment bytes with `Content-Type: video/iso.segment`.
+
+#### 3. Direct MP4 Stream Proxy (HTTP Range Seeking)
+Proxies MP4 video streams while injecting the required upstream Android User-Agent.
+
+* **Method:** `GET`
+* **Path:** `/stream/v/{token}.mp4`
+* **Headers:** Supports `Range: bytes=start-end` header.
+* **Behavior:** Returns `206 Partial Content` with `Content-Range` and `Accept-Ranges: bytes`.
+
+#### 4. Lightweight WebP Image Proxy
+Fetches, compresses, and caches image posters and avatars.
+
+* **Method:** `GET`
+* **Path:** `/img/v/{token}.webp`
+* **Query Parameters:**
+  * `w` (optional): Max width in pixels (default: `180`, capped between `80` and `360`).
+  * `q` (optional): WebP quality factor (default: `45`, capped between `25` and `55`).
+* **Cache Header:** `Cache-Control: public, max-age=86400, immutable`.
+* **Average File Size:** ~7 KB to 10 KB per poster.
+
+#### 5. Subtitle WebVTT Proxy
+* **Method:** `GET`
+* **Path:** `/sub/v/{token}.vtt`
+* **Behavior:** Streams `.vtt` file with `Content-Type: text/vtt; charset=utf-8`.
+
+#### 6. Video Download Endpoint
+Serves the full video with `Content-Disposition: attachment` headers for saving to disk.
+
+* **Method:** `GET`
+* **Path:** `/download/v/{token}.mp4?title={filename}`
+* **Behavior:**
+  * If source is an MP4: Streams with `Content-Disposition: attachment; filename="{filename}.mp4"`.
+  * If source is DASH: Uses server-side `ffmpeg` to remux segments into a continuous MP4 file on-the-fly (`-c copy`).
+
+---
+
+### E. Admin & Analytics Endpoints
+
+*(Requires session login at `/admin`)*
+
+* `GET /api/admin/stats`: Returns server uptime, total video plays, active users, and downloads.
+* `GET /api/admin/logs?page=1&limit=30&action=STREAM`: Paginated activity log entries with client IP, media title, timestamp, and user-agent.
+* `POST /api/admin/clear_logs`: Purges historical visitor activity logs.
+
+---
+
+# 3. Section B: Client Player Integration Guide
+
+Client applications should consume the **Shielded Backend API** directly. Below are working examples for major player runtimes:
+
+### A. Web Player Integration
+
+Using standard [dash.js](https://github.com/Dash-Industry-Forum/dash.js):
+
+```html
+<script src="https://cdn.dashjs.org/latest/dash.all.min.js"></script>
+<video id="videoPlayer" controls autoplay style="width:100%; aspect-ratio:16/9;"></video>
+
+<script>
+  async function loadVideo(subjectId) {
+    const res = await fetch(`/api/resources?subjectId=${subjectId}`);
+    const data = await res.json();
+    const stream = data.data.list[0];
+
+    const player = dashjs.MediaPlayer().create();
+    // Direct playback through shielded local proxy
+    player.initialize(document.querySelector("#videoPlayer"), stream.streamUrl, true);
+  }
+</script>
 ```
 
-Remove trailing `/*` to get the base stream directory:
-* **Base Directory:** `https://sacdn.hakunaymatata.com/dash/1654274595068805784_0_0_1080_h265_919`
-* **Master Manifest (.mpd):** `https://sacdn.hakunaymatata.com/dash/1654274595068805784_0_0_1080_h265_919/index.mpd`
-
 ---
 
-### Step 2: Native Android Playback (ExoPlayer / Media3)
+### B. Native Android (ExoPlayer / Media3)
 
-ExoPlayer connects directly to CloudFront with the signed cookie:
+For an Android application consuming our shielded proxy endpoints, no custom cookie management is required on the mobile client:
 
 ```kotlin
-import com.google.android.exoplayer2.MediaItem
-import com.google.android.exoplayer2.SimpleExoPlayer
-import com.google.android.exoplayer2.source.dash.DashMediaSource
-import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
+import android.net.Uri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.exoplayer.ExoPlayer
 
-fun playStream(manifestUrl: String, signCookie: String) {
-    val dataSourceFactory = DefaultHttpDataSource.Factory()
-        .setUserAgent("ExoPlayerLib/2.19.1")
-        .setDefaultRequestProperties(mapOf(
-            "Cookie" to signCookie,
-            "Referer" to "https://www.movieboxpro.app/"
-        ))
+fun playMovie(player: ExoPlayer, streamUrl: String, isDash: Boolean) {
+    val mediaItem = if (isDash) {
+        MediaItem.Builder()
+            .setUri(Uri.parse(streamUrl)) // e.g. "https://your-domain.com/dash/{token}/index.mpd"
+            .setMimeType(MimeTypes.APPLICATION_MPD)
+            .build()
+    } else {
+        MediaItem.Builder()
+            .setUri(Uri.parse(streamUrl)) // e.g. "https://your-domain.com/stream/v/{token}.mp4"
+            .setMimeType(MimeTypes.VIDEO_MP4)
+            .build()
+    }
 
-    val mediaSource = DashMediaSource.Factory(dataSourceFactory)
-        .createMediaSource(MediaItem.fromUri(manifestUrl))
-
-    player.setMediaSource(mediaSource)
+    player.setMediaItem(mediaItem)
     player.prepare()
     player.play()
 }
@@ -512,21 +477,16 @@ fun playStream(manifestUrl: String, signCookie: String) {
 
 ---
 
-### Step 3: Flutter Playback (`better_player`)
+### C. Flutter Integration
 
 ```dart
 import 'package:better_player/better_player.dart';
 
-void initializePlayer(String manifestUrl, String signCookie) {
+void playStream(String streamUrl, bool isDash) {
   BetterPlayerDataSource dataSource = BetterPlayerDataSource(
     BetterPlayerDataSourceType.network,
-    manifestUrl,
-    headers: {
-      "Cookie": signCookie,
-      "Referer": "https://www.movieboxpro.app/",
-      "User-Agent": "ExoPlayerLib/2.19.1"
-    },
-    videoFormat: BetterPlayerVideoFormat.dash,
+    streamUrl,
+    videoFormat: isDash ? BetterPlayerVideoFormat.dash : BetterPlayerVideoFormat.other,
   );
 
   betterPlayerController.setupDataSource(dataSource);
@@ -535,26 +495,94 @@ void initializePlayer(String manifestUrl, String signCookie) {
 
 ---
 
-### Step 4: Parameter-Signed Media URLs (Query Parameter Authentication)
+### D. External Players (VLC & MX Player)
 
-For players where HTTP headers cannot be configured, extract the three security attributes from `signCookie`:
-* `Policy`: from `CloudFront-Policy`
-* `Signature`: from `CloudFront-Signature`
-* `Key-Pair-Id`: from `CloudFront-Key-Pair-Id`
+On Android, launch external media players directly via Android Intents using the absolute stream URL:
 
-Query-authenticated format:
-```text
-{Base_URL}/index.mpd?Policy={Policy}&Signature={Signature}&Key-Pair-Id={Key-Pair-Id}
+```javascript
+// VLC Player Intent
+const vlcIntent = `intent:${absoluteStreamUrl}#Intent;package=org.videolan.vlc;type=video/*;end`;
+window.location.href = vlcIntent;
+
+// MX Player Intent
+const mxIntent = `intent:${absoluteStreamUrl}#Intent;package=com.mxtech.videoplayer.ad;type=video/*;end`;
+window.location.href = mxIntent;
 ```
 
 ---
 
-## 7. Subtitles & Closed Captions
-* **Method:** `GET`
-* **Path:** `/wefeed-mobile-bff/subject-api/caption`
-* **Query Parameters:**
-  * `subjectId`: Title identifier
-  * `se`: Season number (`0` for movies)
-  * `ep`: Episode number (`0` for movies)
-* **Response:**
-  Returns subtitle tracks array with language codes (`en`, `hi`, `es`, `fr`, etc.) and direct `.srt` / `.vtt` asset URLs.
+# 4. Section C: Direct Upstream Provider Gateway Specification
+
+This section documents the underlying upstream BFF gateway protocol (`api6.aoneroom.com`) for architecture reference.
+
+### Gateway Hosts & Client Headers
+
+| Gateway Host | Environment |
+| :--- | :--- |
+| `https://api6.aoneroom.com` | Primary Gateway |
+| `https://api5.aoneroom.com` | Secondary Failover |
+| `https://api4.aoneroom.com` | Tertiary Failover |
+
+#### Mandatory Headers:
+```http
+User-Agent: com.community.oneroom/50020045 (Linux; U; Android 13; en_US; 22101316G; Build/TQ2A.230405.003; Cronet/135.0.7012.3)
+Accept: application/json
+Content-Type: application/json
+X-Client-Token: {timestamp},{md5_hex_reversed_timestamp}
+x-tr-signature: {timestamp}|2|{base64_hmac_md5}
+X-Client-Info: {"package_name":"com.community.oneroom","version_code":50020045,"os":"android","os_version":"13"}
+```
+
+---
+
+### HMAC-MD5 Request Signing Algorithm
+
+All upstream requests must compute `x-tr-signature` over the canonical representation of the request:
+
+```text
+HTTP_METHOD
+ACCEPT_HEADER
+CONTENT_TYPE
+BODY_LENGTH
+TIMESTAMP
+BODY_MD5_HEX
+CANONICAL_URI
+```
+
+1. **Secret Key:** `76iRl07s0xSN9jqmEWAt79EBJZulIQIsV64FZr2O` (Base64-decoded into raw binary bytes).
+2. **Hash:** Compute HMAC-MD5 of the UTF-8 canonical string.
+3. **Format:** Output is formatted as `"{timestamp}|2|{base64_hmac}"`.
+
+---
+
+### Session Bootstrap & Lifecycle
+
+Before calling upstream endpoints, retrieve a guest session token:
+
+1. Send `GET /wefeed-mobile-bff/tab-operating?page=1&tabId=0&version=` with signed headers.
+2. Extract user token from the response header **`x-user`**:
+   ```json
+   {
+     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI...",
+     "uid": 12345678
+   }
+   ```
+3. Attach to all subsequent requests as:
+   ```http
+   Authorization: Bearer {token}
+   ```
+
+---
+
+### Upstream Endpoints Reference
+
+| Upstream Path | Method | Description |
+| :--- | :--- | :--- |
+| `/wefeed-mobile-bff/tab-operating` | `GET` | Home feed categories, carousels, and rankings (`tabId=0,1,2,3`) |
+| `/wefeed-mobile-bff/subject-api/search` | `POST` | Full catalog search (`keyword`, `page`, `perPage`, `subjectType`) |
+| `/wefeed-mobile-bff/subject-api/search-suggest` | `GET` | Autocomplete suggestions (`keyword`, `perPage`) |
+| `/wefeed-mobile-bff/subject-api/get` | `GET` | Media detail metadata and audio dub editions (`subjectId`) |
+| `/wefeed-mobile-bff/subject-api/season-info` | `GET` | Episodic series seasons & episode numbers (`subjectId`) |
+| `/wefeed-mobile-bff/subject-api/play-info` | `GET` | Resolves raw streams and CloudFront `signCookie` |
+| `/wefeed-mobile-bff/subject-api/play-related-rec` | `POST` | Recommendations / "More Like This" (`subjectId`) |
+| `/wefeed-mobile-bff/subject-api/caption` | `GET` | Subtitle track manifests (`subjectId`, `se`, `ep`) |
