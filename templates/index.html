@@ -854,9 +854,15 @@ function encodeStreamToken(str) {
   return btoa(enc).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-function optimizeImgUrl(url, w = 160, q = 60) {
+function optimizeImgUrl(url, w = 180, q = 45) {
   if (!url || typeof url !== 'string') return '';
-  if (url.startsWith('/img/v/') || url.startsWith('/api/image_proxy') || url.startsWith('/static/')) return url;
+  if (url.startsWith('/img/v/') || url.startsWith('/api/image_proxy')) {
+    if (!url.includes('?')) {
+      return `${url}?w=${w}&q=${q}`;
+    }
+    return url;
+  }
+  if (url.startsWith('/static/')) return url;
   if (!url.startsWith('http://') && !url.startsWith('https://')) return url;
   const token = encodeStreamToken(url);
   if (!token) return '';

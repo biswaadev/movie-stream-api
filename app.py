@@ -261,7 +261,8 @@ def sanitize_data(data):
             if k in ("url", "img", "cover", "avatar", "icon", "poster") and isinstance(v, str) and v.startswith("http"):
                 tok = encode_stream_token(v)
                 if any(ext in v.lower() for ext in (".jpg", ".jpeg", ".png", ".webp", "/image/")) or k in ("img", "cover", "avatar", "icon", "poster"):
-                    out[k] = f"/img/v/{tok}.webp"
+                    w_hint = 120 if k in ("avatar", "icon") else 180
+                    out[k] = f"/img/v/{tok}.webp?w={w_hint}&q=45"
                 elif any(ext in v.lower() for ext in (".vtt", ".srt")):
                     out[k] = f"/sub/v/{tok}.vtt"
                 else:
@@ -285,7 +286,7 @@ def sanitize_data(data):
         if data.startswith("http") and any(d in data for d in ("aoneroom.com", "hakunaymatata.com", "cloudfront.net", "movie-box.co")):
             tok = encode_stream_token(data)
             if any(ext in data.lower() for ext in [".jpg", ".jpeg", ".png", ".webp", "/image/"]):
-                return f"/img/v/{tok}.webp"
+                return f"/img/v/{tok}.webp?w=180&q=45"
             elif any(ext in data.lower() for ext in [".mpd", "__signcookie__"]):
                 return f"/dash/{tok}/index.mpd"
             elif any(ext in data.lower() for ext in [".vtt", ".srt"]):
@@ -321,13 +322,17 @@ def image_proxy_token(token):
         return jsonify({"error": "Invalid image token"}), 400
     w = request.args.get("w", "").strip()
     q = request.args.get("q", "").strip()
-    if (w or q) and ("aoneroom.com" in url or "hakunaymatata.com" in url) and "x-oss-process" not in url:
+    w_val = int(w) if w.isdigit() else 180
+    q_val = int(q) if q.isdigit() else 45
+    # Cap maximum width to 360 and quality to 55 to guarantee low data footprint
+    w_val = min(max(w_val, 80), 360)
+    q_val = min(max(q_val, 25), 55)
+
+    if ("aoneroom.com" in url or "hakunaymatata.com" in url) and "x-oss-process" not in url:
         sep = "&" if "?" in url else "?"
-        w_val = int(w) if w.isdigit() else 160
-        q_val = int(q) if q.isdigit() else 70
         url += f"{sep}x-oss-process=image/resize,w_{w_val}/format,webp/quality,q_{q_val}"
 
-    cache_key = f"img_{token}_{w}_{q}"
+    cache_key = f"img_low_v2_{token}_{w_val}_{q_val}"
     cached = get_cached_image(cache_key)
     if cached:
         data, content_type = cached
@@ -339,7 +344,7 @@ def image_proxy_token(token):
     try:
         r = api._session.get(url, headers={"User-Agent": api.ANDROID_USER_AGENT}, timeout=10)
         if r.status_code == 200:
-            c_type = r.headers.get("Content-Type", "image/webp" if ".webp" in url else "image/jpeg")
+            c_type = r.headers.get("Content-Type", "image/webp")
             set_cached_image(cache_key, (r.content, c_type))
             resp = Response(r.content, status=200, content_type=c_type)
             resp.headers["Cache-Control"] = "public, max-age=86400, immutable"
