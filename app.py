@@ -454,6 +454,15 @@ def trending():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/home")
+def home():
+    tab_id = request.args.get("tabId", "0")
+    try:
+        return jsonify(api.home_feed(tab_id))
+    except Exception as e:  # noqa
+        return jsonify({"error": str(e)}), 500
+
+
 # ---------------------------------------------------------------------------
 # CDN video proxy — mandatory Android UA + Range forwarding + Token Decryption
 # ---------------------------------------------------------------------------

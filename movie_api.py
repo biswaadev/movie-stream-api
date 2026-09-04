@@ -455,27 +455,53 @@ def _fetch_all_resources(subject_id, max_pages=5):
 
 
 
+def home_feed(tab_id=0):
+    """Fetch categorized home feed sections (Trending, Hollywood, Bollywood, Top Charts, etc.)."""
+    cache_key = f"home_feed_{tab_id}"
+    cached = _get_cached(_api_cache, cache_key, 600)
+    if cached:
+        return cached
+
+    try:
+        res = signed_request("GET", "/wefeed-mobile-bff/tab-operating", params={"tabId": str(tab_id), "page": "1", "version": ""})
+        data = res.get("data", res) or {}
+        raw_items = data.get("items", [])
+        sections = []
+        for it in raw_items:
+            subs = it.get("subjects") or []
+            if subs:
+                sections.append({
+                    "title": it.get("title", "Featured"),
+                    "type": it.get("type", "SUBJECTS_MOVIE"),
+                    "count": len(subs),
+                    "items": subs,
+                })
+        out = {"data": {"sections": sections, "raw": data}}
+        _set_cached(_api_cache, cache_key, out)
+        return out
+    except Exception:
+        return {"data": {"sections": []}}
+
+
 def trending():
-    """Fetch trending/recommended content."""
+    """Fetch trending/recommended content from official tab-operating feed."""
     cache_key = "trending"
     cached = _get_cached(_api_cache, cache_key, 600)
     if cached:
         return cached
 
-    url = "https://h5-api.aoneroom.com/h5/subject-api/recommend"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-    }
     try:
-        resp = _session.get(url, headers=headers, timeout=10)
-        if resp.status_code == 200:
-            res = resp.json()
-            d = res.get("data", res) or {}
-            lst = d.get("items") or d.get("list") or d.get("verticalRanks") or []
-            if lst:
-                _set_cached(_api_cache, cache_key, res)
-                return res
+        feed = home_feed(tab_id=0)
+        sections = feed.get("data", {}).get("sections", [])
+        trending_sec = next((s for s in sections if "trending" in s["title"].lower()), None)
+        if not trending_sec and sections:
+            trending_sec = sections[0]
+
+        items = trending_sec["items"] if trending_sec else []
+        if items:
+            out = {"data": {"items": items, "verticalRanks": [{"title": trending_sec["title"], "items": items}]}}
+            _set_cached(_api_cache, cache_key, out)
+            return out
     except Exception:
         pass
 
@@ -484,5 +510,5 @@ def trending():
         _set_cached(_api_cache, cache_key, res)
         return res
     except Exception:
-        return {"data": {"verticalRanks": []}}
+        return {"data": {"items": [], "verticalRanks": []}}
 

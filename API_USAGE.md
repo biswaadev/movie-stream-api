@@ -159,15 +159,97 @@ Authorization: Bearer {token}
 
 ## 5. API Catalog Endpoints
 
-### 1. Featured Media Feeds & Carousels
-Retrieves curated media carousels, home banners, and trending categories.
+### 1. Home Page Feeds, Rankings & Category Carousels
+Retrieves curated media carousels, home banners, trending titles, top rankings, and genre rows for the app's landing screen.
 
 * **Method:** `GET`
 * **Path:** `/wefeed-mobile-bff/tab-operating`
 * **Query Parameters:**
-  * `tabId`: Category ID (`0` = Featured, `1` = Movies, `2` = Series, `3` = Animation)
+  * `tabId`: Feed Category Identifier:
+    * `0`: **Featured Home Feed** (Trending Now, Hollywood, Cinema, Bollywood, South Indian, Coming Soon)
+    * `1`: **Movies Collection** (Hollywood Hits, Regional Cinema)
+    * `2`: **Top Charts & Rankings** (Top Movies, Trending in Cinema, Sci-Fi Future, Super Hero, Action, Comedy)
+    * `3`: **Kids & Learning**
   * `page`: Page index (default: `1`)
-  * `version`: Version string (empty)
+  * `version`: Version token (pass empty string `""` on first call; cache and pass the returned `version` string on subsequent calls)
+
+* **Key Categories Returned in Home Feed (`tabId=0` & `tabId=2`):**
+  * 🔥 **Trending Now**: Top viral titles updated daily
+  * 🏆 **Top Movies (Rankings)**: Highest-ranked box-office titles (`tabId=2`)
+  * 🎬 **Cinema / New Releases**: Latest theatrical releases
+  * 🌐 **Hollywood**: English & dual-audio blockbusters
+  * 🎭 **Bollywood & South Indian**: Hindi, Tamil, Telugu blockbusters
+  * 🦸 **Super Hero & Sci-Fi Future**: Marvel, DC, and futuristic sci-fi
+  * 📅 **Coming Soon**: Upcoming titles with posters and release dates
+
+* **Response Sample (Home Feed Structure):**
+  ```json
+  {
+    "code": 0,
+    "data": {
+      "tabId": 0,
+      "version": "3bac7cb9205a921072c59be089a2d33c",
+      "items": [
+        {
+          "type": "SUBJECTS_MOVIE",
+          "title": "🔥Trending Now",
+          "subjects": [
+            {
+              "subjectId": "5349301616099452064",
+              "title": "Gandhari [Hindi]",
+              "releaseDate": "2026-09-03",
+              "cover": {
+                "url": "https://pbcdn.aoneroom.com/image/2026/09/03/2c4018c2164acab9.jpg"
+              }
+            }
+          ]
+        },
+        {
+          "type": "SUBJECTS_MOVIE",
+          "title": "Hollywood",
+          "subjects": [
+            {
+              "subjectId": "7826893701690839800",
+              "title": "The Runner [Hindi]",
+              "releaseDate": "2026-09-02",
+              "cover": {
+                "url": "https://pbcdn.aoneroom.com/image/2026/08/27/cca59929eb029e9f.jpg"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+  ```
+
+---
+
+### 2. Anime & Genre Catalog Browsing
+To browse Anime and specific genres in your mobile app, query the search endpoint with appropriate type filters:
+
+* **Method:** `POST`
+* **Path:** `/wefeed-mobile-bff/subject-api/search`
+* **Browse Anime Series:**
+  ```json
+  {
+    "keyword": "Anime",
+    "page": 1,
+    "perPage": 20,
+    "subjectType": 2
+  }
+  ```
+  *(subjectType: `2` filters exclusively for episodic series and anime).*
+
+* **Browse Top Ranked Media:**
+  ```json
+  {
+    "keyword": "Top",
+    "page": 1,
+    "perPage": 20,
+    "subjectType": 0
+  }
+  ```
 
 ---
 
