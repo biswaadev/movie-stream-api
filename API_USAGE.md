@@ -1,45 +1,66 @@
-# MovieBox / OneRoom Complete API Documentation (Mobile App Guide)
+# Video-on-Demand (VOD) Client API & Mobile Integration Specification
 
-This document provides the complete technical specification for integrating MovieBox/OneRoom APIs directly into an Android (Kotlin/Java), Flutter, iOS (Swift), or React Native mobile application **without requiring any intermediate backend server**.
-
----
-
-## 1. System Overview & Direct Architecture
-
-```
-[ Your Mobile App ] 
-       │
-       ├─── (1) Bootstrap & Token ─────► api6.aoneroom.com
-       │
-       ├─── (2) Search, Detail, Streams ► api6.aoneroom.com
-       │
-       └─── (3) Direct 1080p Video ────► Amazon CloudFront (sacdn.hakunaymatata.com)
-```
-
-* **Server Cost:** $0 (Zero backend servers needed)
-* **Video Bandwidth:** 100% streamed directly from Amazon CloudFront CDN to user's device
-* **Quality:** Up to 4K / 1080p HEVC (H.265) & H.264 with Multi-Audio Dubs & Subtitles
+This technical specification details the client integration architecture, HMAC security protocol, catalog endpoints, and MPEG-DASH streaming lifecycle for developing native mobile clients (Android, iOS, Flutter, React Native).
 
 ---
 
-## 2. Base URLs & Constants
+## 1. System Architecture
 
-| Key | Value |
-| :--- | :--- |
-| **Primary Host** | `https://api6.aoneroom.com` |
-| **Fallback Host 1** | `https://api5.aoneroom.com` |
-| **Fallback Host 2** | `https://api4.aoneroom.com` |
-| **Secret Key (Base64)** | `76iRl07s0xSN9jqmEWAt79EBJZulIQIsV64FZr2O` |
-| **Version Code** | `50020045` |
-| **App Package** | `com.community.oneroom` |
+The service utilizes a direct client-to-CDN architecture where catalog metadata is retrieved from the gateway service, while high-bitrate media playback is streamed directly from distributed CloudFront edge servers to the client.
 
-### Required Android User-Agent:
+```
+┌─────────────────┐
+│   Mobile App    │
+└─┬─────────────┬─┘
+  │             │
+  │ (1) Metadata & Session Auth
+  │             │
+  ▼             ▼
+┌───────────────┴───────────────┐        ┌───────────────────────────────┐
+│      API Gateway Service      │        │      Global CloudFront CDN    │
+│    (api6.aoneroom.com)        │        │   (sacdn.hakunaymatata.com)   │
+└───────────────────────────────┘        └───────────────┬───────────────┘
+                                                         │
+                                        (2) Direct MPEG-DASH 1080p Video
+                                                         │
+                                                         ▼
+                                                ┌─────────────────┐
+                                                │ ExoPlayer / App │
+                                                └─────────────────┘
+```
+
+* **Data Delivery:** High-bitrate video segments stream directly from CDN edge caches.
+* **Stream Profiles:** Multi-resolution MPEG-DASH (1080p, 720p, 480p) supporting HEVC (H.265) and AVC (H.264).
+* **Multi-Track Audio:** Discrete language dub tracks with timed text subtitle manifests.
+
+---
+
+## 2. Service Endpoints & Configuration
+
+### Gateway Hosts
+
+| Target | Host URL | Usage |
+| :--- | :--- | :--- |
+| **Primary Gateway** | `https://api6.aoneroom.com` | Primary API cluster |
+| **Failover Gateway 1** | `https://api5.aoneroom.com` | Secondary failover host |
+| **Failover Gateway 2** | `https://api4.aoneroom.com` | Tertiary failover host |
+
+### Client Configuration Constants
+
+```properties
+CLIENT_SECRET_KEY = 76iRl07s0xSN9jqmEWAt79EBJZulIQIsV64FZr2O
+CLIENT_APP_ID = com.community.oneroom
+CLIENT_VERSION_CODE = 50020045
+CLIENT_VERSION_NAME = 3.0.03.0529.03
+```
+
+### Standard Client User-Agent
 ```http
 com.community.oneroom/50020045 (Linux; U; Android 13; en_US; 22101316G; Build/TQ2A.230405.003; Cronet/135.0.7012.3)
 ```
 
-### Required Client Info Header (`X-Client-Info`):
-JSON stringified payload:
+### Client Device Information (`X-Client-Info`)
+Every request carries a stringified JSON header identifying the client environment:
 ```json
 {
   "package_name": "com.community.oneroom",
@@ -64,80 +85,98 @@ JSON stringified payload:
 
 ---
 
-## 3. Cryptographic Signature Generation
+## 3. Request Security & Signature Specification
 
-Every HTTP request must include two security headers: `X-Client-Token` and `x-tr-signature`.
+All HTTP requests to the API gateway must be cryptographically signed with two headers: `X-Client-Token` and `x-tr-signature`.
 
-### A. `X-Client-Token` Algorithm
-1. Take current Unix epoch timestamp in seconds (integer, e.g. `1725375000`).
-2. Reverse the timestamp string (e.g. `"0005735271"`).
-3. Compute **MD5 hex digest** of the reversed string.
-4. Format: `"{timestamp},{md5_hex}"`.
+### A. `X-Client-Token`
+* **Input:** Unix epoch timestamp in seconds (integer, e.g. `1725375000`).
+* **Calculation:** Reverse the digits of the timestamp, compute the **MD5** hex hash of the reversed string.
+* **Output Format:** `"{timestamp},{md5_hex}"`
+* *Example:*
+  ```
+  Timestamp: 1725375000
+  Reversed:  0005735271
+  MD5 Hash:  d41d8cd98f00b204e9800998ecf8427e
+  Result:    1725375000,d41d8cd98f00b204e9800998ecf8427e
+  ```
 
-### B. `x-tr-signature` Algorithm (HMAC-MD5)
-1. Construct the Canonical String using newline (`\n`) separated fields:
+### B. `x-tr-signature` (HMAC-MD5)
+The gateway validates request integrity using an HMAC-MD5 signature over a canonical representation of the request.
+
+1. **Construct the Canonical String** using newline (`\n`) separated fields:
    ```text
-   HTTP_METHOD (e.g. GET or POST)
-   ACCEPT_HEADER (usually application/json)
-   CONTENT_TYPE (application/json if body present, else empty)
-   BODY_LENGTH (length of body in bytes as string, else empty)
-   TIMESTAMP (Unix epoch in seconds as string)
-   BODY_MD5_HEX (MD5 hex of first 4096 bytes of body, else empty)
-   CANONICAL_URL (pathname + sorted query string e.g. /path?a=1&b=2)
+   HTTP_METHOD
+   ACCEPT_HEADER
+   CONTENT_TYPE
+   BODY_LENGTH
+   TIMESTAMP
+   BODY_MD5_HEX
+   CANONICAL_URI
    ```
-2. Decode `SECRET_KEY_DEFAULT` from Base64 into raw bytes.
-3. Compute **HMAC-MD5** of the Canonical String using the raw secret bytes.
-4. Base64-encode the resulting HMAC digest.
-5. Format: `"{timestamp}|2|{base64_hmac}"`.
+   * `HTTP_METHOD`: Uppercase method (`GET` or `POST`).
+   * `ACCEPT_HEADER`: Value of Accept header (`application/json`).
+   * `CONTENT_TYPE`: Value of Content-Type (`application/json` when body is present, otherwise empty).
+   * `BODY_LENGTH`: Length of body in bytes as string (empty if no body).
+   * `TIMESTAMP`: Unix timestamp in seconds (string).
+   * `BODY_MD5_HEX`: MD5 hex hash of first 4096 bytes of body (empty if no body).
+   * `CANONICAL_URI`: Pathname plus alphabetized/sorted query parameters (e.g., `/path?a=1&b=2`).
+
+2. **Compute Signature:**
+   * Decode `CLIENT_SECRET_KEY` from Base64 into binary key bytes.
+   * Calculate **HMAC-MD5** of the canonical UTF-8 string using the key bytes.
+   * Base64-encode the resulting HMAC digest.
+3. **Format:** `"{timestamp}|2|{base64_hmac}"`
 
 ---
 
-## 4. App Lifecycle & Bootstrap Protocol
+## 4. Session Bootstrap & Token Lifecycle
 
-Before making authenticated requests, your app must obtain a temporary user session Bearer token.
+Prior to fetching catalog metadata, the client initializes an authenticated session token.
 
-### Step 1: Bootstrap Call
+### Bootstrap Request
 * **Method:** `GET`
 * **Path:** `/wefeed-mobile-bff/tab-operating?page=1&tabId=0&version=`
-* **Headers:** Send signed headers (`X-Client-Token`, `x-tr-signature`, `User-Agent`, `X-Client-Info`).
+* **Headers:** Include signed headers (`X-Client-Token`, `x-tr-signature`, `User-Agent`, `X-Client-Info`).
 
-### Step 2: Extract Bearer Token
-Check the response headers for **`x-user`** (or `X-User`):
+### Token Extraction
+Extract the session object from the response header **`x-user`** (or `X-User`):
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsIn...",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI...",
   "uid": 12345678
 }
 ```
-Store this token in memory.
 
-### Step 3: Attach to Subsequent Requests
-For all following requests, include the header:
+### Authorization Header
+Attach the session token to all subsequent requests:
 ```http
 Authorization: Bearer {token}
 ```
-*(If any API returns HTTP 401 Unauthorized, re-run the bootstrap call to refresh the token).*
+*Note: If the gateway returns HTTP 401 Unauthorized, refresh the session by repeating the bootstrap step.*
 
 ---
 
-## 5. Endpoints Reference
+## 5. API Catalog Endpoints
 
-### 1. Home Feed / Banners / Trending
+### 1. Featured Media Feeds & Carousels
+Retrieves curated media carousels, home banners, and trending categories.
+
 * **Method:** `GET`
 * **Path:** `/wefeed-mobile-bff/tab-operating`
-* **Query Params:**
-  * `tabId`: `0` (Home), `1` (Movies), `2` (TV Series), `3` (Anime)
-  * `page`: `1`
-  * `version`: `""`
-* **Response:**
-  Returns carousels, trending banners, recommendation rows with `subjectId`, `title`, `cover`, `rating`.
+* **Query Parameters:**
+  * `tabId`: Category ID (`0` = Featured, `1` = Movies, `2` = Series, `3` = Animation)
+  * `page`: Page index (default: `1`)
+  * `version`: Version string (empty)
 
 ---
 
-### 2. Search Titles
+### 2. Search Media Catalog
+Full-text query against titles, keywords, and release years.
+
 * **Method:** `POST`
 * **Path:** `/wefeed-mobile-bff/subject-api/search`
-* **Body:**
+* **Request Body:**
   ```json
   {
     "keyword": "Avatar",
@@ -146,8 +185,9 @@ Authorization: Bearer {token}
     "subjectType": 0
   }
   ```
-  *(subjectType: 0 = All, 1 = Movies, 2 = TV Shows)*
-* **Response Sample:**
+  *(subjectType: `0` = All Media, `1` = Feature Films, `2` = Episodic Series)*
+
+* **Response:**
   ```json
   {
     "code": 0,
@@ -159,7 +199,9 @@ Authorization: Bearer {token}
           "subjectType": 1,
           "releaseDate": "2009-12-18",
           "imdbRating": "7.9",
-          "cover": { "url": "https://macdn.aoneroom.com/..." }
+          "cover": {
+            "url": "https://pbcdn.aoneroom.com/image/2026/01/27/d0afc52be1b6f93d5c9a70f9105f3a37.jpg"
+          }
         }
       ],
       "pager": { "hasMore": true, "totalCount": 100 }
@@ -169,25 +211,27 @@ Authorization: Bearer {token}
 
 ---
 
-### 3. Search Suggestions (Auto-Complete)
+### 3. Search Autocomplete Suggestions
 * **Method:** `GET`
 * **Path:** `/wefeed-mobile-bff/subject-api/search-suggest`
-* **Query Params:**
-  * `keyword`: `Avat`
-  * `perPage`: `10`
+* **Query Parameters:**
+  * `keyword`: Partial query prefix (e.g. `Avat`)
+  * `perPage`: Result limit (e.g. `10`)
 
 ---
 
-### 4. Subject Details (Full Movie / Series Info)
+### 4. Media Title Details & Metadata
+Retrieves full title metadata, synopsis, localized dub editions, and cast details.
+
 * **Method:** `GET`
 * **Path:** `/wefeed-mobile-bff/subject-api/get`
-* **Query Params:**
-  * `subjectId`: `1654274595068805784`
-* **Response Sample (Avatar Example):**
+* **Query Parameters:**
+  * `subjectId`: Media item identifier (e.g. `1654274595068805784`)
+
+* **Response Structure:**
   ```json
   {
     "code": 0,
-    "message": "success",
     "data": {
       "subjectId": "1654274595068805784",
       "title": "Avatar [Hindi]",
@@ -230,12 +274,6 @@ Authorization: Bearer {token}
           "lanName": "Telugu dub",
           "lanCode": "te",
           "original": false
-        },
-        {
-          "subjectId": "2115849262339607256",
-          "lanName": "ptbr dub",
-          "lanCode": "ptbr",
-          "original": false
         }
       ],
       "staffList": [
@@ -256,12 +294,6 @@ Authorization: Bearer {token}
           "name": "Zoe Saldana",
           "character": "Neytiri",
           "avatarUrl": "https://pbcdn.aoneroom.com/image/2022/09/02/242ceae290dd9d08ccee8d3327616429.jpg"
-        },
-        {
-          "staffId": "1624273347639135912",
-          "name": "Sigourney Weaver",
-          "character": "Dr. Grace Augustine",
-          "avatarUrl": "https://pbcdn.aoneroom.com/image/2022/09/02/6fce31d65dc1f2aba788445bd1b72371.jpg"
         }
       ]
     }
@@ -270,27 +302,27 @@ Authorization: Bearer {token}
 
 ---
 
-### 5. TV Series Season & Episode List
+### 5. Episodic Series Seasons & Episode Index
 * **Method:** `GET`
 * **Path:** `/wefeed-mobile-bff/subject-api/season-info`
-* **Query Params:**
-  * `subjectId`: `102175217904222864` (Series subjectId)
-* **Response Contains:**
-  * List of seasons (`se: 1, 2, ...`)
-  * Episodes array per season (`ep: 1, 2, ...`) with episode thumbnails, titles, and runtimes.
+* **Query Parameters:**
+  * `subjectId`: Series subject identifier (e.g. `102175217904222864`)
+* **Response:**
+  Returns available seasons list, episode numbers, episode titles, thumbnails, and runtimes.
 
 ---
 
-### 6. Official Video Streams Resolver (`play-info`)
-> ⚠️ **CRITICAL NOTE:** Do NOT call `/subject-api/resource` because direct MP4s on that endpoint return dummy 917 KB "Please Update the App" promotional video clips. Always use `/subject-api/play-info`.
+### 6. Video Stream Manifest Resolver (`play-info`)
+Resolves playback streams and secure CloudFront access credentials for a title.
 
 * **Method:** `GET`
 * **Path:** `/wefeed-mobile-bff/subject-api/play-info`
-* **Query Params:**
-  * `subjectId`: `{subjectId}` (Use specific dub subjectId if dub is chosen)
-  * `se`: `0` (or Season number e.g. `1`)
-  * `ep`: `0` (or Episode number e.g. `1`)
-* **Response Sample:**
+* **Query Parameters:**
+  * `subjectId`: Media or dub item identifier
+  * `se`: Season index (`0` for standalone movies, `1+` for series)
+  * `ep`: Episode index (`0` for standalone movies, `1+` for series)
+
+* **Response Structure:**
   ```json
   {
     "code": 0,
@@ -310,31 +342,30 @@ Authorization: Bearer {token}
 
 ---
 
-## 6. How to Extract the Direct Video Stream
+## 6. Manifest Parsing & Playback Integration
 
-### Step 1: Parse the CDN Base URL from `signCookie`
-Decode the `CloudFront-Policy` base64 string inside `signCookie`:
-```python
-policy_b64 = cookie.split("CloudFront-Policy=")[1].split(";")[0]
-# URL-safe base64 decode:
-raw_json = base64.urlsafe_b64decode(padded_b64).decode("utf-8")
-data = json.loads(clean_json)
-base_dash_url = data["Statement"][0]["Resource"].replace("/*", "")
-# Example: https://sacdn.hakunaymatata.com/dash/1654274595068805784_0_0_1080_h265_919
+### Step 1: Extract Base Stream URL from `signCookie`
+The `signCookie` contains an encoded `CloudFront-Policy` parameter. Decode the Base64 policy JSON to resolve the resource path:
+
+```json
+{
+  "Statement": [
+    {
+      "Resource": "https://sacdn.hakunaymatata.com/dash/1654274595068805784_0_0_1080_h265_919/*"
+    }
+  ]
+}
 ```
 
-### Step 2: MPEG-DASH Manifest URL
-The master manifest URL is:
-```text
-{base_dash_url}/index.mpd
-```
+Remove trailing `/*` to get the base stream directory:
+* **Base Directory:** `https://sacdn.hakunaymatata.com/dash/1654274595068805784_0_0_1080_h265_919`
+* **Master Manifest (.mpd):** `https://sacdn.hakunaymatata.com/dash/1654274595068805784_0_0_1080_h265_919/index.mpd`
 
 ---
 
-## 7. Video Playback in Mobile Apps (Zero Server Bandwidth)
+### Step 2: Native Android Playback (ExoPlayer / Media3)
 
-### Approach A: Android ExoPlayer (Recommended for Android APK)
-ExoPlayer supports native DASH streaming and signed CloudFront cookies with **zero proxy servers**:
+ExoPlayer connects directly to CloudFront with the signed cookie:
 
 ```kotlin
 import com.google.android.exoplayer2.MediaItem
@@ -342,68 +373,68 @@ import com.google.android.exoplayer2.SimpleExoPlayer
 import com.google.android.exoplayer2.source.dash.DashMediaSource
 import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
 
-val manifestUrl = "https://sacdn.hakunaymatata.com/dash/.../index.mpd"
-val signCookie = stream.signCookie
+fun playStream(manifestUrl: String, signCookie: String) {
+    val dataSourceFactory = DefaultHttpDataSource.Factory()
+        .setUserAgent("ExoPlayerLib/2.19.1")
+        .setDefaultRequestProperties(mapOf(
+            "Cookie" to signCookie,
+            "Referer" to "https://www.movieboxpro.app/"
+        ))
 
-// Attach CloudFront cookie to ExoPlayer network layer
-val dataSourceFactory = DefaultHttpDataSource.Factory()
-    .setUserAgent("ExoPlayerLib/2.19.1")
-    .setDefaultRequestProperties(mapOf(
-        "Cookie" to signCookie,
-        "Referer" to "https://www.movieboxpro.app/"
-    ))
+    val mediaSource = DashMediaSource.Factory(dataSourceFactory)
+        .createMediaSource(MediaItem.fromUri(manifestUrl))
 
-val mediaSource = DashMediaSource.Factory(dataSourceFactory)
-    .createMediaSource(MediaItem.fromUri(manifestUrl))
-
-player.setMediaSource(mediaSource)
-player.prepare()
-player.play()
+    player.setMediaSource(mediaSource)
+    player.prepare()
+    player.play()
+}
 ```
 
 ---
 
-### Approach B: Flutter (`video_player` / `better_player`)
+### Step 3: Flutter Playback (`better_player`)
+
 ```dart
 import 'package:better_player/better_player.dart';
 
-BetterPlayerDataSource dataSource = BetterPlayerDataSource(
-  BetterPlayerDataSourceType.network,
-  "https://sacdn.hakunaymatata.com/dash/.../index.mpd",
-  headers: {
-    "Cookie": signCookie,
-    "Referer": "https://www.movieboxpro.app/",
-    "User-Agent": "ExoPlayerLib/2.19.1"
-  },
-  videoFormat: BetterPlayerVideoFormat.dash,
-);
+void initializePlayer(String manifestUrl, String signCookie) {
+  BetterPlayerDataSource dataSource = BetterPlayerDataSource(
+    BetterPlayerDataSourceType.network,
+    manifestUrl,
+    headers: {
+      "Cookie": signCookie,
+      "Referer": "https://www.movieboxpro.app/",
+      "User-Agent": "ExoPlayerLib/2.19.1"
+    },
+    videoFormat: BetterPlayerVideoFormat.dash,
+  );
 
-betterPlayerController.setupDataSource(dataSource);
+  betterPlayerController.setupDataSource(dataSource);
+}
 ```
 
 ---
 
-### Approach C: Signed Query Parameters (Direct CDN Without Cookie Header)
-Amazon CloudFront also supports URL query parameters instead of headers:
-Extract from `signCookie`:
-* `Policy`: value of `CloudFront-Policy`
-* `Signature`: value of `CloudFront-Signature`
-* `Key-Pair-Id`: value of `CloudFront-Key-Pair-Id`
+### Step 4: Parameter-Signed Media URLs (Query Parameter Authentication)
 
-Attach as query parameters:
+For players where HTTP headers cannot be configured, extract the three security attributes from `signCookie`:
+* `Policy`: from `CloudFront-Policy`
+* `Signature`: from `CloudFront-Signature`
+* `Key-Pair-Id`: from `CloudFront-Key-Pair-Id`
+
+Query-authenticated format:
 ```text
-https://sacdn.hakunaymatata.com/dash/.../chunk-00001.m4s?Policy={Policy}&Signature={Signature}&Key-Pair-Id={Key-Pair-Id}
+{Base_URL}/index.mpd?Policy={Policy}&Signature={Signature}&Key-Pair-Id={Key-Pair-Id}
 ```
-This URL is publicly fetchable from any device without authentication headers.
 
 ---
 
-## 8. Subtitles / Captions
+## 7. Subtitles & Closed Captions
 * **Method:** `GET`
 * **Path:** `/wefeed-mobile-bff/subject-api/caption`
-* **Query Params:**
-  * `subjectId`: `{subjectId}`
-  * `se`: `0`
-  * `ep`: `0`
+* **Query Parameters:**
+  * `subjectId`: Title identifier
+  * `se`: Season number (`0` for movies)
+  * `ep`: Episode number (`0` for movies)
 * **Response:**
-  List of subtitle tracks with language code (`en`, `hi`, `es`, `fr`, etc.) and direct `.srt` / `.vtt` CDN links.
+  Returns subtitle tracks array with language codes (`en`, `hi`, `es`, `fr`, etc.) and direct `.srt` / `.vtt` asset URLs.
