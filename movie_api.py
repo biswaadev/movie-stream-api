@@ -262,6 +262,24 @@ def season_info(subject_id):
     return res
 
 
+def get_recommendations(subject_id):
+    """Fetch related/recommended movies and shows for details screen."""
+    cache_key = f"related_{subject_id}"
+    cached = _get_cached(_api_cache, cache_key, 600)
+    if cached:
+        return cached
+    try:
+        res = signed_request("POST", "/wefeed-mobile-bff/subject-api/play-related-rec", body={"subjectId": str(subject_id)})
+        data = res.get("data", res) or {}
+        items = data.get("items") or []
+        safe_items = [it for it in items if is_family_safe(it)]
+        out = {"data": {"items": safe_items}, "pager": data.get("pager", {})}
+        _set_cached(_api_cache, cache_key, out)
+        return out
+    except Exception:
+        return {"data": {"items": []}}
+
+
 def extract_base_dash_url(cookie):
     """Extract CDN base URL from CloudFront signed cookie."""
     if not cookie or "CloudFront-Policy=" not in cookie:

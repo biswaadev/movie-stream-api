@@ -424,6 +424,44 @@ Resolves playback streams and secure CloudFront access credentials for a title.
 
 ---
 
+### 7. Related Media Recommendations ("More Like This")
+Retrieves personalized similar movies, related series, and franchise sequels associated with a specific title for the details screen.
+
+* **Method:** `POST`
+* **Path:** `/wefeed-mobile-bff/subject-api/play-related-rec`
+* **Request Body:**
+  ```json
+  {
+    "subjectId": "1654274595068805784"
+  }
+  ```
+* **Response Sample:**
+  ```json
+  {
+    "code": 0,
+    "data": {
+      "items": [
+        {
+          "subjectId": "5286679345266918984",
+          "subjectType": 1,
+          "title": "Avengers: Infinity War [Hindi]",
+          "releaseDate": "2018-04-27",
+          "duration": "2h 29m",
+          "genre": "Action, Adventure, Sci-Fi",
+          "imdbRatingValue": "8.4",
+          "cover": {
+            "url": "https://pbcdn.aoneroom.com/image/2026/01/27/edd42613fb50bad2e5552966a0d6cba1.jpg"
+          },
+          "corner": "Hindi",
+          "restrictKid": 0
+        }
+      ]
+    }
+  }
+  ```
+
+---
+
 ## 6. Manifest Parsing & Playback Integration
 
 ### Step 1: Extract Base Stream URL from `signCookie`

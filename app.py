@@ -463,6 +463,14 @@ def home():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/related/<subject_id>")
+def related(subject_id):
+    try:
+        return jsonify(api.get_recommendations(subject_id))
+    except Exception as e:  # noqa
+        return jsonify({"error": str(e)}), 500
+
+
 # ---------------------------------------------------------------------------
 # CDN video proxy — mandatory Android UA + Range forwarding + Token Decryption
 # ---------------------------------------------------------------------------
