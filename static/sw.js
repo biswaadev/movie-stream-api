@@ -1,5 +1,5 @@
-// OFC Movies Service Worker v3.0
-const CACHE_NAME = 'ofc-movies-v3';
+// OFC Movies Service Worker v4.0
+const CACHE_NAME = 'ofc-movies-v4';
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.json',

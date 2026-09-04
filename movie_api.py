@@ -227,9 +227,54 @@ def signed_request(method, path, params=None, body=None):
 # ---------------------------------------------------------------------------
 # High-level API functions
 # ---------------------------------------------------------------------------
+def subject_detail(subject_id):
+    cache_key = f"detail_{subject_id}"
+    cached = _get_cached(_api_cache, cache_key, _api_cache_ttl)
+    if cached:
+        return cached
+    res = signed_request("GET", "/wefeed-mobile-bff/subject-api/get", params={"subjectId": subject_id})
+    _set_cached(_api_cache, cache_key, res)
+    return res
+
+
+def enrich_items_with_descriptions(items, max_workers=12):
+    """Fetch and populate authentic storyline descriptions for items missing them."""
+    if not items:
+        return
+    def _fill(it):
+        if not isinstance(it, dict):
+            return
+        if it.get("description"):
+            return
+        sid = it.get("subjectId") or it.get("id")
+        if not sid:
+            return
+        try:
+            d = subject_detail(sid)
+            data = d.get("data", {}) if isinstance(d, dict) else {}
+            desc = (data.get("description") or data.get("desc") or data.get("introduction") or "").strip()
+            if desc:
+                it["description"] = desc
+        except Exception:
+            pass
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        list(ex.map(_fill, items))
+
+
 def search(keyword, page=1, per_page=20, subject_type=0):
+    cache_key = f"search_{keyword}_{page}_{per_page}_{subject_type}"
+    cached = _get_cached(_api_cache, cache_key, _api_cache_ttl)
+    if cached:
+        return cached
     body = {"keyword": keyword, "page": page, "perPage": min(int(per_page), 20), "subjectType": int(subject_type)}
-    return signed_request("POST", "/wefeed-mobile-bff/subject-api/search", body=body)
+    res = signed_request("POST", "/wefeed-mobile-bff/subject-api/search", body=body)
+    data = res.get("data", {}) if isinstance(res, dict) else {}
+    items = data.get("items", []) or data.get("list", []) or []
+    if items:
+        enrich_items_with_descriptions(items, max_workers=10)
+    _set_cached(_api_cache, cache_key, res)
+    return res
 
 
 def search_suggest(keyword, per_page=10):
@@ -238,16 +283,6 @@ def search_suggest(keyword, per_page=10):
     if cached:
         return cached
     res = signed_request("GET", "/wefeed-mobile-bff/subject-api/search-suggest", params={"keyword": keyword, "perPage": int(per_page)})
-    _set_cached(_api_cache, cache_key, res)
-    return res
-
-
-def subject_detail(subject_id):
-    cache_key = f"detail_{subject_id}"
-    cached = _get_cached(_api_cache, cache_key, _api_cache_ttl)
-    if cached:
-        return cached
-    res = signed_request("GET", "/wefeed-mobile-bff/subject-api/get", params={"subjectId": subject_id})
     _set_cached(_api_cache, cache_key, res)
     return res
 
@@ -273,6 +308,8 @@ def get_recommendations(subject_id):
         data = res.get("data", res) or {}
         items = data.get("items") or []
         safe_items = [it for it in items if is_family_safe(it)]
+        if safe_items:
+            enrich_items_with_descriptions(safe_items, max_workers=10)
         out = {"data": {"items": safe_items}, "pager": data.get("pager", {})}
         _set_cached(_api_cache, cache_key, out)
         return out
@@ -516,6 +553,11 @@ def home_feed(tab_id=0):
                     "count": len(safe_subs),
                     "items": safe_subs,
                 })
+        all_subs = []
+        for sec in sections:
+            all_subs.extend(sec.get("items", []))
+        if all_subs:
+            enrich_items_with_descriptions(all_subs, max_workers=20)
         out = {"data": {"sections": sections, "raw": data}}
         _set_cached(_api_cache, cache_key, out)
         return out

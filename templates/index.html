@@ -211,6 +211,9 @@
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
     overflow: hidden; text-overflow: ellipsis;
   }
+  .card .desc:empty {
+    display: none;
+  }
   /* States */
   .empty, .loading, .error {
     text-align: center; padding: 60px 20px; color: var(--muted);
@@ -353,7 +356,7 @@
     flex-direction: column;
     contain: layout paint;
     content-visibility: auto;
-    contain-intrinsic-size: 150px 270px;
+    contain-intrinsic-size: 150px 300px;
     transform: translateZ(0);
   }
   @media (hover: hover) {
@@ -398,6 +401,20 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+  }
+  .carousel-card .desc {
+    font-size: 11px;
+    color: #999;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+  .carousel-card .desc:empty {
+    display: none;
   }
 
   /* Pagination */
@@ -933,6 +950,7 @@ function renderHomeFeed(data) {
       const rating = it.imdbRatingValue || it.imdbRating || '';
       const cover = it.cover?.url || (Array.isArray(it.cover) ? it.cover[0]?.url : '') || '';
       const optSrc = optimizeImgUrl(cover, 160, 60);
+      const rawDesc = (it.description || it.desc || it.introduction || '').trim();
 
       return `
         <div class="carousel-card" onclick="navigateTo('/watch/${id}', this)">
@@ -946,6 +964,7 @@ function renderHomeFeed(data) {
               <span>${year}</span>
               ${rating ? `<span style="color:#f5c518">★ ${rating}</span>` : ''}
             </div>
+            <div class="desc" data-card-desc="${id}" title="${esc(rawDesc)}">${esc(rawDesc)}</div>
           </div>
         </div>
       `;
@@ -962,6 +981,7 @@ function renderHomeFeed(data) {
       </div>
     `;
   }).join('');
+  observeMissingDescriptions();
 }
 
 async function loadCategoryTab(tab, btn) {
@@ -1015,6 +1035,68 @@ async function loadCategoryTab(tab, btn) {
   }
 }
 
+const descCache = new Map();
+let descObserver = null;
+
+function observeMissingDescriptions() {
+  const missingEls = document.querySelectorAll('[data-card-desc]');
+  if (!missingEls.length) return;
+
+  if (!('IntersectionObserver' in window)) {
+    Array.from(missingEls).slice(0, 10).forEach(el => {
+      const sid = el.getAttribute('data-card-desc');
+      if (sid && !el.textContent.trim()) fetchCardDescription(sid, el);
+    });
+    return;
+  }
+
+  if (!descObserver) {
+    descObserver = new IntersectionObserver((entries, obs) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const el = entry.target;
+          obs.unobserve(el);
+          const sid = el.getAttribute('data-card-desc');
+          if (sid && !el.textContent.trim()) {
+            fetchCardDescription(sid, el);
+          }
+        }
+      });
+    }, { rootMargin: '250px' });
+  }
+
+  missingEls.forEach(el => {
+    if (!el.textContent.trim()) {
+      descObserver.observe(el);
+    }
+  });
+}
+
+async function fetchCardDescription(sid, el) {
+  if (!sid) return;
+  if (descCache.has(sid)) {
+    const cached = descCache.get(sid);
+    if (cached && el && !el.textContent.trim()) {
+      el.textContent = cached;
+      el.setAttribute('title', cached);
+    }
+    return;
+  }
+  try {
+    const r = await fetch(`/api/detail/${sid}`);
+    const data = await r.json();
+    const d = data.data || data;
+    const realDesc = (d.description || d.desc || d.introduction || d.summary || '').trim();
+    if (realDesc) {
+      descCache.set(sid, realDesc);
+      if (el && !el.textContent.trim()) {
+        el.textContent = realDesc;
+        el.setAttribute('title', realDesc);
+      }
+    }
+  } catch (e) {}
+}
+
 function cardHTML(item) {
   const id = item.subjectId || item.id;
   const title = item.title || item.postTitle || item.subjectName || 'Untitled';
@@ -1047,9 +1129,9 @@ function cardHTML(item) {
   }
   genres = genres.slice(0, 5);
 
-  const rawDesc = item.description || item.desc || item.introduction || '';
+  const rawDesc = (item.description || item.desc || item.introduction || item.summary || item.synopsis || '').trim();
   const akaStr = item.aka ? `Also known as: ${item.aka}` : '';
-  const desc = rawDesc || akaStr || `Watch ${title} in HD with high-speed playback, dubbing options and subtitle support. Click to view full details and episodes.`;
+  const desc = rawDesc || akaStr || '';
 
   let poster = '';
   const cover = item.cover || item.imageList || item.images || item.image || [];
@@ -1087,7 +1169,7 @@ function cardHTML(item) {
           ${country ? `<span class="meta-item">${pinIcon}${esc(country)}</span>` : ''}
         </div>
         ${genres.length ? `<div class="genre-list">${genres.map(g => `<span class="genre-chip">${esc(g)}</span>`).join('')}</div>` : ''}
-        <div class="desc">${esc(desc)}</div>
+        <div class="desc" data-card-desc="${id}" title="${esc(desc)}">${esc(desc)}</div>
       </div>
     </div>`;
 }
@@ -1129,6 +1211,7 @@ async function doSearch(page, append = false) {
     const grid = document.getElementById('resultsGrid');
     if (grid) {
       grid.insertAdjacentHTML('beforeend', list.map(cardHTML).join(''));
+      observeMissingDescriptions();
     }
     
     hasMore = list.length >= 20;
