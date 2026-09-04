@@ -1011,7 +1011,7 @@ function renderMeta() {
 function renderSeasons() {
   const m = state.model;
   if (!m || !$("seasonTabs")) return;
-  if (m.seasons.length <= 1) { $("seasonTabs").innerHTML = ""; return; }
+  if (!m.isSeries || !m.seasons || m.seasons.length <= 1) { $("seasonTabs").innerHTML = ""; return; }
   $("seasonTabs").innerHTML = m.seasons.map((s, i) =>
     `<button class="season-tab ${i === state.season ? "active" : ""}" onclick="selectSeason(${i})">${esc(s.label)}</button>`
   ).join("");
@@ -1019,16 +1019,31 @@ function renderSeasons() {
 
 function renderEpisodes() {
   const m = state.model;
-  if (!m || !$("epGrid")) return;
-  if ($("episodes")) $("episodes").hidden = false;
+  const epSec = $("episodes");
+  const epGrid = $("epGrid");
+  if (!m || !epGrid) return;
+
+  if (!m.isSeries) {
+    if (epSec) {
+      epSec.hidden = true;
+      epSec.style.display = "none";
+    }
+    epGrid.innerHTML = "";
+    return;
+  }
+
+  if (epSec) {
+    epSec.hidden = false;
+    epSec.style.display = "block";
+  }
   const eps = m.seasons[state.season]?.eps || [];
-  $("epGrid").innerHTML = eps.map((e, i) => {
+  epGrid.innerHTML = eps.map((e, i) => {
     const epNum = e.num || (i + 1);
     const titleAttr = esc(e.name ? `Episode ${epNum}: ${e.name}` : `Episode ${epNum}`);
     return `<button class="ep-box ${i === state.ep ? "active" : ""}" onclick="onEpisodeClick(${i})" title="${titleAttr}">${epNum}</button>`;
   }).join("");
 
-  const activeBtn = $("epGrid").querySelector(".ep-box.active");
+  const activeBtn = epGrid.querySelector(".ep-box.active");
   if (activeBtn) {
     try { activeBtn.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); } catch(e){}
   }
@@ -1454,7 +1469,7 @@ function openPlayModal(epIdx = null) {
   const seWrap = $("playSeasonWrap");
   const seSel = $("playSeasonSelect");
   if (seSel) {
-    if (m.seasons && m.seasons.length > 1) {
+    if (m.isSeries && m.seasons && m.seasons.length > 1) {
       if (seWrap) seWrap.style.display = "block";
       seSel.innerHTML = m.seasons.map((s, i) => `<option value="${i}" ${i === state.season ? 'selected' : ''}>${esc(s.label)}</option>`).join('');
     } else {
@@ -1485,6 +1500,11 @@ function populatePlayEpisodes() {
   const epSel = $("playEpSelect");
   const m = state.model;
   if (!epSel || !m) return;
+
+  if (!m.isSeries) {
+    if (epWrap) epWrap.style.display = "none";
+    return;
+  }
 
   const eps = m.seasons[state.season]?.eps || [];
   if (eps.length > 1) {
@@ -1810,7 +1830,7 @@ function openDownloadModal() {
   const seWrap = $("dlSeasonWrap");
   const seSel = $("dlSeasonSelect");
   if (seSel && m) {
-    if (m.seasons && m.seasons.length > 1) {
+    if (m.isSeries && m.seasons && m.seasons.length > 1) {
       if (seWrap) seWrap.style.display = "block";
       seSel.innerHTML = m.seasons.map((s, i) => `<option value="${i}" ${i === state.season ? 'selected' : ''}>${esc(s.label)}</option>`).join('');
     } else {
@@ -1950,7 +1970,7 @@ async function renderDownloadEpisodes() {
   const chosenQual = $("dlQualitySelect")?.value || '720p';
 
   const seasonEps = m.seasons[state.season]?.eps || [];
-  if (statusEl) statusEl.textContent = `Fetching ${seasonEps.length} episode stream links...`;
+  if (statusEl) statusEl.textContent = m.isSeries ? `Fetching ${seasonEps.length} episode stream links...` : `Fetching download stream link...`;
 
   listEl.innerHTML = seasonEps.map((e, i) => `
     <div style="background:var(--surface2);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px;" class="skeleton">
@@ -1990,7 +2010,7 @@ async function renderDownloadEpisodes() {
       index: i,
       se: seParam,
       epNum: epNum,
-      epName: e.name || `Episode ${epNum}`,
+      epName: m.isSeries ? (e.name || `Episode ${epNum}`) : m.title,
       sizeMB: sizeMB,
       url: (i === state.ep) ? rawUrl : '',
       title: fileTitle,
@@ -1998,7 +2018,16 @@ async function renderDownloadEpisodes() {
     };
   });
 
-  if (statusEl) statusEl.textContent = `${dlEpData.length} episodes available (${chosenQual})`;
+  const selectAll = $("dlSelectAll");
+  if (selectAll && selectAll.parentElement) {
+    selectAll.parentElement.style.display = m.isSeries ? "flex" : "none";
+  }
+
+  if (statusEl) {
+    statusEl.textContent = m.isSeries
+      ? `${dlEpData.length} episodes available (${chosenQual})`
+      : `Full movie ready (${chosenQual})`;
+  }
 
   listEl.innerHTML = dlEpData.map(item => {
     const sizeStr = item.sizeMB >= 1000 ? (item.sizeMB / 1024).toFixed(2) + ' GB' : item.sizeMB + ' MB';
@@ -2350,15 +2379,12 @@ function renderInitialSkeletons() {
     </div>`;
   const epGrid = $("epGrid");
   const seasonTabs = $("seasonTabs");
-  if (seasonTabs) {
-    seasonTabs.innerHTML = '<div class="skeleton" style="width:90px;height:34px;border-radius:20px;"></div><div class="skeleton" style="width:90px;height:34px;border-radius:20px;"></div>';
+  if (seasonTabs) seasonTabs.innerHTML = '';
+  if ($("episodes")) {
+    $("episodes").hidden = true;
+    $("episodes").style.display = "none";
   }
-  if (epGrid) {
-    $("episodes").hidden = false;
-    epGrid.innerHTML = Array(12).fill(0).map(() => `
-      <div class="ep-box skeleton" style="border:none;pointer-events:none;"></div>
-    `).join("");
-  }
+  if (epGrid) epGrid.innerHTML = '';
 }
 
 async function initApi() {
@@ -2369,8 +2395,11 @@ async function initApi() {
     apiJSON(`/api/related/${SUBJECT_ID}`).catch(() => ({})),
   ]);
   const d = detail.data || detail;
-  const seasonList = (seasons?.data?.seasons || seasons?.data || []).filter(x => (x.maxEp ?? 1) > 0);
-  const isSeries = [2, 5].includes(d.subjectType) || seasonList.length > 0;
+  const rawSeasons = seasons?.data?.seasons || seasons?.data || [];
+  const seasonList = rawSeasons.filter(x => (x.maxEp || 0) > 0);
+  const totalEps = seasonList.reduce((sum, s) => sum + (s.maxEp || 0), 0);
+  // Movies (subjectType === 1) or standalone titles with <= 1 ep should not show episode grids
+  const isSeries = d.subjectType !== 1 && ([2, 5].includes(d.subjectType) || seasonList.length > 1 || totalEps > 1);
   state.model = buildModel(d, seasonList, isSeries);
   const rawRecs = related?.data?.items || [];
   if (rawRecs.length > 0) {
