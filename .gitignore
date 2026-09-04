@@ -3,3 +3,7 @@ __pycache__/
 *.log
 *.db
 .DS_Store
+
+tunnel_url.txt
+*.log
+
