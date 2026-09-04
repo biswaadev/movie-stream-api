@@ -627,6 +627,9 @@ def dash_manifest(token):
                 'media="chunk-stream$RepresentationID$-$Number%05d$.m4s"',
                 f'media="{base_dash}/chunk-stream$RepresentationID$-$Number%05d$.m4s?{qs}"'
             )
+            # Standardize MovieBox HEVC codec tag to RFC 6381 so browser MediaSource recognizes & decodes video track
+            raw_text = raw_text.replace('codecs="hev1"', 'codecs="hvc1.1.6.L120.B0"')
+            raw_text = raw_text.replace('codecs="hvc1"', 'codecs="hvc1.1.6.L120.B0"')
 
         resp = Response(raw_text, status=r.status_code, content_type="application/dash+xml")
         resp.headers["Access-Control-Allow-Origin"] = "*"

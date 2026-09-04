@@ -267,34 +267,51 @@
   }
   .toggle-btn:hover { text-decoration: underline; }
 
-  .scroller {
-    display: flex; gap: 18px; overflow-x: auto;
-    padding-bottom: 12px; scroll-snap-type: x mandatory;
+  .scroller, .cast-row, #recsCarousel, #castCarousel {
+    display: flex; gap: 14px; overflow-x: auto;
+    padding-bottom: 12px;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-x: contain !important;
+    will-change: scroll-position !important;
+    transform: translateZ(0) !important;
+    scroll-behavior: auto !important;
   }
-  .cast-card { width: 110px; flex-shrink: 0; text-align: center; scroll-snap-align: start; }
+  .cast-card {
+    width: 110px; flex-shrink: 0; text-align: center;
+    contain: layout paint;
+    content-visibility: auto;
+    contain-intrinsic-size: 110px 140px;
+  }
   .cast-avatar {
     width: 92px; height: 92px; margin: 0 auto 10px;
     border-radius: 50%; overflow: hidden;
     border: 2px solid var(--border);
     transition: border-color .15s, transform .15s;
   }
-  .cast-card:hover .cast-avatar { border-color: var(--accent); transform: scale(1.06); }
+  @media (hover: hover) {
+    .cast-card:hover .cast-avatar { border-color: var(--accent); transform: scale(1.06); }
+  }
   .cast-avatar img { width: 100%; height: 100%; object-fit: cover; }
   .cast-card .name { font-size: 13px; font-weight: 600; }
   .cast-card .role { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
   .rec-card {
-    width: 150px; flex-shrink: 0; cursor: pointer; scroll-snap-align: start;
-    transition: transform .15s;
+    width: 150px; flex-shrink: 0; cursor: pointer;
+    contain: layout paint;
+    content-visibility: auto;
+    contain-intrinsic-size: 150px 240px;
+    transform: translateZ(0);
   }
-  .rec-card:hover { transform: translateY(-4px) scale(1.03); }
+  @media (hover: hover) {
+    .rec-card:hover { transform: translateY(-4px) scale(1.03); }
+    .rec-card:hover .rec-poster img { transform: scale(1.08); }
+  }
   .rec-poster {
     aspect-ratio: 2/3; border-radius: 10px; overflow: hidden;
     background: var(--surface); border: 1px solid var(--border);
     box-shadow: 0 8px 20px rgba(0,0,0,0.4);
   }
   .rec-poster img { width: 100%; height: 100%; object-fit: cover; transition: transform .25s; }
-  .rec-card:hover .rec-poster img { transform: scale(1.08); }
   .rec-card .title { font-size: 13px; font-weight: 600; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rec-card .year { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
@@ -546,8 +563,8 @@
     </div>
 
     <!-- Video Container (16:9 Aspect Ratio) -->
-    <div id="videoContainer" data-shaka-player-container style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.1);">
-      <video id="webVideoPlayer" data-shaka-player style="width:100%;height:100%;object-fit:contain;" controls playsinline crossorigin="anonymous" poster=""></video>
+    <div id="videoContainer" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.1);">
+      <video id="webVideoPlayer" style="width:100%;height:100%;object-fit:contain;background:#000;" controls playsinline preload="auto" poster=""></video>
 
       <!-- Click to Watch Overlay -->
       <div id="playerStartOverlay" onclick="startWebPlayback()" style="position:absolute;inset:0;background:rgba(0,0,0,0.55);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;z-index:15;backdrop-filter:blur(2px);transition:background .2s;">
@@ -565,7 +582,26 @@
       </div>
     </div>
 
-    <!-- Quick Player Settings Bar (Audio Dub & Quality Selectors) -->
+    <!-- Audio-Only Warning Banner (Auto-detects if browser lacks HEVC video decoder) -->
+    <div id="playerAudioOnlyBanner" style="display:none;margin-top:10px;background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.35);color:#ffa726;padding:12px 16px;border-radius:10px;font-size:13px;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:10px;line-height:1.5;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div>
+          <span style="font-weight:700;color:#fff;">Sirf Audio aa rahi hai?</span> Aapke browser me H.265 (HEVC) hardware video decoder support nahi hai. Full video dekhne ke liye VLC ya MX Player me chalayein (Direct 1-Tap):
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="launchVlcDirect()" style="background:#e50914;color:#fff;border:none;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Open in VLC
+        </button>
+        <button onclick="launchMxDirect()" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.2);padding:7px 14px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">
+          Open in MX
+        </button>
+      </div>
+    </div>
+
+    <!-- Quick Player Settings Bar (Audio Dub, Quality Selectors, & App Launcher) -->
     <div style="margin-top:12px;background:var(--surface2);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
       <div style="display:flex;align-items:center;gap:10px;min-width:0;">
         <span style="font-size:13px;font-weight:700;color:#fff;display:inline-flex;align-items:center;gap:6px;">
@@ -583,6 +619,10 @@
           <label style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;">Quality:</label>
           <select id="playerQualSelect" style="background:var(--bg);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;outline:none;" onchange="onPlayerQualChange()"></select>
         </div>
+        <button onclick="launchVlcDirect()" title="Open directly in VLC or MX Player (Full Video Support)" style="background:rgba(229,9,20,0.15);color:#ff7a81;border:1px solid rgba(229,9,20,0.3);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span>VLC / MX</span>
+        </button>
       </div>
     </div>
   </section>
@@ -1417,9 +1457,40 @@ function setDubsLoading(isLoading) {
   if (dQualSkel) dQualSkel.style.display = isLoading ? "block" : "none";
 }
 
+let audioOnlyCheckTimer = null;
+
 async function setupPlayer() {
   const video = $("webVideoPlayer");
   if (!video) return;
+
+  // Track video width to detect if browser only decodes audio (HEVC missing)
+  if (!video._audioCheckInitialized) {
+    video._audioCheckInitialized = true;
+    video.addEventListener("playing", () => {
+      clearTimeout(audioOnlyCheckTimer);
+      audioOnlyCheckTimer = setTimeout(() => {
+        const banner = $("playerAudioOnlyBanner");
+        if (!banner) return;
+        // If playing for >2s but video has 0 width or height (audio-only playback detected)
+        if (!video.paused && (video.videoWidth === 0 || video.videoHeight === 0) && video.currentTime > 0.5) {
+          banner.style.display = "flex";
+        } else {
+          banner.style.display = "none";
+        }
+      }, 2000);
+    });
+
+    video.addEventListener("timeupdate", () => {
+      const banner = $("playerAudioOnlyBanner");
+      if (banner && video.videoWidth > 0 && video.videoHeight > 0) {
+        banner.style.display = "none";
+      }
+    });
+
+    video.addEventListener("pause", () => {
+      clearTimeout(audioOnlyCheckTimer);
+    });
+  }
 
   // 1. Initialize Shaka Player (Google's production DASH player)
   if (window.shaka) {
@@ -1437,6 +1508,11 @@ async function setupPlayer() {
               baseDelay: 1000,
               backoffFactor: 2
             }
+          },
+          manifest: {
+            dash: {
+              ignoreMinBufferTime: true
+            }
           }
         });
 
@@ -1444,25 +1520,6 @@ async function setupPlayer() {
           console.warn("Shaka Player event error, trying fallback:", event.detail);
           tryDashFallback();
         });
-
-        // Initialize Shaka UI if container available
-        const container = $("videoContainer");
-        if (window.shaka.ui && container) {
-          try {
-            const ui = new shaka.ui.Overlay(player, container, video);
-            ui.configure({
-              controlPanelElements: [
-                'play_pause',
-                'time_and_duration',
-                'spacer',
-                'mute',
-                'volume',
-                'fullscreen',
-                'overflow_menu'
-              ]
-            });
-          } catch(e) {}
-        }
 
         shakaPlayerInstance = player;
         return;
@@ -1730,6 +1787,48 @@ function getAbsoluteStreamUrl() {
   const token = getStreamToken(raw);
   if (!token) return "";
   return `${window.location.origin}/dash/${token}/index.mpd`;
+}
+
+function launchVlcDirect() {
+  const raw = getSelectedPlayRaw();
+  const token = getStreamToken(raw);
+  if (!token) { toast("Stream link not ready"); return; }
+  const manifestUrl = `${window.location.origin}/dash/${token}/index.mpd`;
+  const noProto = manifestUrl.replace(/^https?:\/\//, '');
+  const scheme = manifestUrl.startsWith('https') ? 'https' : 'http';
+
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  toast("Opening in VLC Player...");
+  if (isAndroid) {
+    window.location.href = `intent://${noProto}#Intent;scheme=${scheme};type=video/*;package=org.videolan.vlc;action=android.intent.action.VIEW;end`;
+    setTimeout(() => { window.location.href = `vlc://${manifestUrl}`; }, 400);
+  } else if (isIOS) {
+    window.location.href = `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(manifestUrl)}`;
+    setTimeout(() => { window.location.href = `vlc://${manifestUrl}`; }, 400);
+  } else {
+    navigator.clipboard.writeText(manifestUrl).then(() => {
+      toast("✓ Stream URL copied! Open VLC > Media > Open Network Stream and paste.");
+    }).catch(() => {
+      prompt("Copy Stream URL for VLC / MX Player:", manifestUrl);
+    });
+  }
+}
+
+function launchMxDirect() {
+  const raw = getSelectedPlayRaw();
+  const token = getStreamToken(raw);
+  if (!token) { toast("Stream link not ready"); return; }
+  const manifestUrl = `${window.location.origin}/dash/${token}/index.mpd`;
+  const noProto = manifestUrl.replace(/^https?:\/\//, '');
+  const scheme = manifestUrl.startsWith('https') ? 'https' : 'http';
+
+  toast("Opening in MX Player...");
+  window.location.href = `intent://${noProto}#Intent;scheme=${scheme};type=video/*;package=com.mxtech.videoplayer.ad;action=android.intent.action.VIEW;end`;
+  setTimeout(() => {
+    window.location.href = `intent://${noProto}#Intent;scheme=${scheme};type=video/*;package=com.mxtech.videoplayer.pro;action=android.intent.action.VIEW;end`;
+  }, 350);
 }
 
 $("dlBtn").addEventListener("click", () => {
