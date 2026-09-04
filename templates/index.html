@@ -885,7 +885,16 @@ function renderHomeFeed(data) {
 
   homeSec.innerHTML = sections.map(sec => {
     const title = esc(sec.title || 'Featured');
-    const items = sec.items || [];
+    const items = (sec.items || []).filter(it => {
+      if (it.restrictKid === 1) return false;
+      const cr = (it.contentRating || '').toUpperCase();
+      if (['R', 'NC-17', '18+', 'TV-MA', 'XXX'].includes(cr)) return false;
+      const t = (it.title || '').toLowerCase();
+      if (t.includes('18+') || t.includes('erotic') || t.includes('porn') || t.includes('sex')) return false;
+      const c = (it.corner || '').toLowerCase();
+      if (c.includes('18+') || c.includes('adult')) return false;
+      return true;
+    });
     if (!items.length) return '';
 
     const cardsHtml = items.map(it => {

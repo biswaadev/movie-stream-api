@@ -455,9 +455,24 @@ def _fetch_all_resources(subject_id, max_pages=5):
 
 
 
+def is_family_safe(it):
+    if it.get("restrictKid") == 1:
+        return False
+    cr = str(it.get("contentRating") or "").upper()
+    if cr in ["R", "NC-17", "18+", "TV-MA", "XXX"]:
+        return False
+    corner = str(it.get("corner") or "").lower()
+    if "18+" in corner or "adult" in corner:
+        return False
+    title = str(it.get("title") or "").lower()
+    if "18+" in title or "erotic" in title or "porn" in title or "sex" in title:
+        return False
+    return True
+
+
 def home_feed(tab_id=0):
-    """Fetch categorized home feed sections (Trending, Hollywood, Bollywood, Top Charts, etc.)."""
-    cache_key = f"home_feed_{tab_id}"
+    """Fetch categorized home feed sections with Family Mode filtering (no 18+/adult content on home page)."""
+    cache_key = f"home_feed_safe_{tab_id}"
     cached = _get_cached(_api_cache, cache_key, 600)
     if cached:
         return cached
@@ -468,13 +483,20 @@ def home_feed(tab_id=0):
         raw_items = data.get("items", [])
         sections = []
         for it in raw_items:
+            sec_title = str(it.get("title") or "").strip()
+            sec_title_lower = sec_title.lower()
+            # Filter out adult-only sections from Home page
+            if any(k in sec_title_lower for k in ["short tv", "shorts", "18+", "adult", "erotic", "fight zone"]):
+                continue
+
             subs = it.get("subjects") or []
-            if subs:
+            safe_subs = [s for s in subs if is_family_safe(s)]
+            if safe_subs:
                 sections.append({
-                    "title": it.get("title", "Featured"),
+                    "title": sec_title or "Featured",
                     "type": it.get("type", "SUBJECTS_MOVIE"),
-                    "count": len(subs),
-                    "items": subs,
+                    "count": len(safe_subs),
+                    "items": safe_subs,
                 })
         out = {"data": {"sections": sections, "raw": data}}
         _set_cached(_api_cache, cache_key, out)
